@@ -17,6 +17,32 @@
   text-align: center;
 }
 
+.footer {
+  display: flex;
+  justify-content: center;
+}
+
+.githubLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 0.9rem;
+  color: var(--color-faint);
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.githubLink:hover {
+  color: var(--color-muted);
+  text-decoration: underline;
+}
+
+.githubIcon {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: currentColor;
+}
+
 .title {
   margin: 0;
   font-size: 2rem;

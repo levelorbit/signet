@@ -103,6 +103,19 @@ function App() {
         </button>
       </div>
 
+      <div className={styles.footer}>
+        <a
+          className={styles.githubLink}
+          href="https://github.com/levelorbit/signet"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <svg className={styles.githubIcon} width="18" height="18" aria-hidden="true">
+            <use href="/icons.svg#github-icon" />
+          </svg>
+          Open on GitHub
+        </a>
+      </div>
     </main>
   );
 }
