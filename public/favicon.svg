@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Signet favicon">
+  <!-- Progress ring: open arc with a ~60° gap centered at the top-left -->
+  <path
+    d="M 12.635 3.443 A 13 13 0 1 1 3.443 12.635"
+    fill="none"
+    stroke="#863bff"
+    stroke-width="4"
+    stroke-linecap="round"
+  />
+  <!-- Checkmark confirmation -->
+  <polyline
+    points="10,16.5 14.5,21 22.5,11.5"
+    fill="none"
+    stroke="#863bff"
+    stroke-width="4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

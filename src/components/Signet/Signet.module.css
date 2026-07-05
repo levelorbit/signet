@@ -1,0 +1,187 @@
+.signet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.button {
+  position: relative;
+  overflow: hidden;
+  border: none;
+  border-radius: 12px;
+  padding: var(--space-md) var(--space-lg);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-bg);
+  background: var(--color-ink);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  will-change: transform;
+  transition: box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--color-ink-hover);
+  box-shadow: 0 4px 14px oklch(0 0 0 / 0.18);
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 3px;
+}
+
+.button:disabled {
+  cursor: default;
+}
+
+.button.paid {
+  background: var(--color-paid);
+}
+
+.fill {
+  position: absolute;
+  inset: 0;
+  background: var(--color-progress);
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.paid .fill {
+  background: var(--color-paid);
+}
+
+.label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Taller than the 18px icons, so their appearance can't change the button height. */
+  line-height: 1.25rem;
+}
+
+.label svg {
+  flex: none;
+}
+
+.labelIn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  animation: label-in 200ms ease-out;
+}
+
+.labelOut {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  opacity: 0;
+  pointer-events: none;
+  animation: label-out 200ms ease-out;
+}
+
+/* A completed payment deserves more weight than an ordinary label shift. */
+.labelIn.slowSwap,
+.labelOut.slowSwap {
+  animation-duration: 450ms;
+}
+
+@keyframes label-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
+@keyframes label-out {
+  from {
+    opacity: 1;
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
+.ring {
+  transform: rotate(-90deg);
+}
+
+.ringTrack {
+  fill: none;
+  stroke: oklch(1 0 0 / 0.25);
+  stroke-width: 2.5;
+}
+
+.ringArc {
+  fill: none;
+  stroke: var(--color-bg);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.check {
+  fill: none;
+  stroke: var(--color-bg);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.flash {
+  animation: flash 260ms ease-out;
+}
+
+@keyframes flash {
+  0% {
+    filter: brightness(1.7);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash,
+  .labelIn,
+  .labelOut {
+    animation: none;
+  }
+}
+
+.hint {
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  left: 0;
+  right: 0;
+  margin: 0;
+  font-size: 0.85rem;
+  text-align: center;
+  color: var(--color-faint);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.hint[data-visible] {
+  opacity: 1;
+}
+
+.status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

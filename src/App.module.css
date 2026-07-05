@@ -1,0 +1,154 @@
+.page {
+  max-width: 26rem;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-xl);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px oklch(0 0 0 / 0.06);
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-md);
+}
+
+.itemPrice {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  font-weight: 600;
+}
+
+.totalPrice {
+  font-variant-numeric: tabular-nums;
+}
+
+.payment {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.9rem;
+}
+
+.cardIcon rect {
+  fill: none;
+  stroke: var(--color-border-strong);
+}
+
+.cardIcon circle {
+  fill: var(--color-muted);
+}
+
+.cardIcon circle:last-of-type {
+  fill: var(--color-faint);
+  fill-opacity: 0.85;
+}
+
+.paymentSaved {
+  margin-left: auto;
+  padding: 2px var(--space-sm);
+  font-size: 0.75rem;
+  color: var(--color-faint);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.modes {
+  display: flex;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.modesLegend {
+  padding: 0;
+  margin-bottom: var(--space-xs);
+  font-size: 0.8rem;
+  color: var(--color-faint);
+}
+
+.modeOption {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.reset {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  padding: var(--space-xs) var(--space-md);
+  font: inherit;
+  font-size: 0.9rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.reset:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.reset:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
