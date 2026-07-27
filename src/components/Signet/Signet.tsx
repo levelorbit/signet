@@ -84,6 +84,8 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
   const ringRef = useRef<SVGCircleElement>(null);
   const onPaidRef = useRef(onPaid);
   onPaidRef.current = onPaid;
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
 
   const anim = useRef<AnimState>(null);
   if (anim.current === null) {
@@ -265,6 +267,19 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
     setPhase("idle");
     ensureRunning();
   }, [ensureRunning]);
+
+  useEffect(() => {
+    if (phaseRef.current === "paid") return;
+    const a = anim.current!;
+    a.filling = false;
+    a.draining = false;
+    a.undoStart = 0;
+    a.progress = 0;
+    a.scale.snap(1);
+    setPhase("idle");
+    setShowHint(false);
+    ensureRunning();
+  }, [mode, ensureRunning]);
 
   const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     if (mode !== "hold" || event.button !== 0) return;
