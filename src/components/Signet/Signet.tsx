@@ -6,33 +6,28 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { Spring, type SpringConfig } from "./spring.ts";
+import { Spring } from "./spring.ts";
+import {
+  DRAIN_SPEED_FACTOR,
+  FILL_DURATION_MS,
+  FILL_END_EASE,
+  FINISH_DURATION_MS,
+  HOLD_SCALE,
+  PRESS_SPRING,
+  QUICK_TAP_MS,
+  RING_CIRCUMFERENCE,
+  RING_RADIUS,
+  SETTLE_KICK_VELOCITY,
+  SETTLE_SPRING,
+  SLIP_FORGIVENESS,
+  UNDO_WINDOW_MS,
+} from "./constants.ts";
 import styles from "./Signet.module.css";
 
 export type SignetMode = "hold" | "undo";
 
 type Phase = "idle" | "holding" | "draining" | "undoing" | "confirmed";
 type Icon = "ring" | "check" | "none";
-
-const FILL_DURATION_MS = 1100;
-const FINISH_DURATION_MS = 450;
-// Draining slower than a snap keeps release feeling like backing out, not failure.
-const DRAIN_SPEED_FACTOR = 2.6;
-// A release this close to the end is intent with a slipped finger, so it counts.
-const SLIP_FORGIVENESS = 0.92;
-const QUICK_TAP_MS = 200;
-const UNDO_WINDOW_MS = 5000;
-const UNDO_WINDOW_SECONDS = Math.round(UNDO_WINDOW_MS / 1000);
-const HOLD_SCALE = 0.96;
-// Ease-out exponent: the last stretch of the fill decelerates so it feels earned.
-const FILL_END_EASE = 1.4;
-
-const PRESS_SPRING: SpringConfig = { stiffness: 420, damping: 34 };
-const SETTLE_SPRING: SpringConfig = { stiffness: 300, damping: 26 };
-const SETTLE_KICK_VELOCITY = 1.5;
-
-const RING_RADIUS = 8;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 function easeFill(progress: number): number {
   return 1 - Math.pow(1 - progress, FILL_END_EASE);
@@ -73,6 +68,22 @@ interface SignetProps {
   labels: SignetLabels;
   mode?: SignetMode;
   onConfirm?: () => void;
+  /**
+   * How long the button must be held before the action commits, in ms.
+   * @default 1100
+   */
+  holdDuration?: number;
+  /**
+   * How long a committed action stays undoable in undo mode, in ms.
+   * @default 5000
+   */
+  undoWindow?: number;
+  /**
+   * Progress between 0 and 1 past which releasing still commits, so a finger
+   * that slips near the end reads as intent rather than a cancel.
+   * @default 0.92
+   */
+  slipForgiveness?: number;
 }
 
 interface AnimState {
@@ -88,7 +99,14 @@ interface AnimState {
   scale: Spring;
 }
 
-function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
+function Signet({
+  labels,
+  mode: modeOverride,
+  onConfirm,
+  holdDuration = FILL_DURATION_MS,
+  undoWindow = UNDO_WINDOW_MS,
+  slipForgiveness = SLIP_FORGIVENESS,
+}: SignetProps) {
   const mode = usePointerMode(modeOverride);
   const [phase, setPhase] = useState<Phase>("idle");
   const [showHint, setShowHint] = useState(false);
@@ -99,6 +117,8 @@ function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
   const ringRef = useRef<SVGCircleElement>(null);
   const onConfirmRef = useRef(onConfirm);
   onConfirmRef.current = onConfirm;
+  const configRef = useRef({ holdDuration, undoWindow, slipForgiveness });
+  configRef.current = { holdDuration, undoWindow, slipForgiveness };
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
@@ -139,12 +159,13 @@ function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
   const tick = useCallback(
     (now: number) => {
       const a = anim.current!;
+      const config = configRef.current;
       const dt = now - a.last;
       a.last = now;
       let active = false;
 
       if (a.filling) {
-        a.progress = Math.min(1, a.progress + dt / FILL_DURATION_MS);
+        a.progress = Math.min(1, a.progress + dt / config.holdDuration);
         if (a.progress >= 1) {
           commitConfirm(now);
         } else {
@@ -153,7 +174,7 @@ function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
       } else if (a.draining) {
         a.progress = Math.max(
           0,
-          a.progress - (dt / FILL_DURATION_MS) * DRAIN_SPEED_FACTOR,
+          a.progress - (dt / config.holdDuration) * DRAIN_SPEED_FACTOR,
         );
         if (a.progress <= 0) {
           a.draining = false;
@@ -165,12 +186,12 @@ function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
 
       if (a.undoStart > 0) {
         const elapsed = now - a.undoStart;
-        if (elapsed >= UNDO_WINDOW_MS) {
+        if (elapsed >= config.undoWindow) {
           commitConfirm(now);
         } else {
           if (ringRef.current) {
             ringRef.current.style.strokeDashoffset = String(
-              RING_CIRCUMFERENCE * (elapsed / UNDO_WINDOW_MS),
+              RING_CIRCUMFERENCE * (elapsed / config.undoWindow),
             );
           }
           active = true;
@@ -193,11 +214,16 @@ function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
         active = true;
       }
 
+      const eased = easeFill(a.progress);
       if (fillRef.current) {
-        fillRef.current.style.transform = `scaleX(${easeFill(a.progress)})`;
+        fillRef.current.style.transform = `scaleX(${eased})`;
       }
       if (buttonRef.current) {
         buttonRef.current.style.transform = `scale(${a.scale.value})`;
+        // Published for consumers building their own fill. Kept on the button
+        // rather than the wrapper: a variable recalculates every descendant,
+        // and the button has the fewest.
+        buttonRef.current.style.setProperty("--signet-progress", String(eased));
       }
 
       a.raf = active ? requestAnimationFrame(tick) : 0;
@@ -243,7 +269,7 @@ function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
     a.scale.config = PRESS_SPRING;
     a.scale.target = 1;
     const now = performance.now();
-    if (a.progress >= SLIP_FORGIVENESS) {
+    if (a.progress >= configRef.current.slipForgiveness) {
       commitConfirm(now);
       return;
     }
@@ -345,7 +371,7 @@ function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
   const status = (() => {
     if (phase === "confirmed") return `${labels.confirmed}.`;
     if (phase === "undoing")
-      return `${labels.confirmed}. Press again within ${UNDO_WINDOW_SECONDS} seconds to undo.`;
+      return `${labels.confirmed}. Press again within ${Math.round(undoWindow / 1000)} seconds to undo.`;
     return "";
   })();
 
@@ -368,15 +394,14 @@ function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
   }
 
   return (
-    <div className={styles.signet}>
+    <div className={styles.signet} data-signet="" data-mode={mode}>
       <button
         ref={buttonRef}
         type="button"
-        className={[
-          styles.button,
-          phase === "confirmed" ? styles.confirmed : "",
-          flash ? styles.flash : "",
-        ].join(" ")}
+        data-signet-button=""
+        data-phase={phase}
+        data-mode={mode}
+        className={[styles.button, flash ? styles.flash : ""].join(" ")}
         disabled={phase === "confirmed"}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
@@ -390,7 +415,12 @@ function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
           if (event.target === event.currentTarget) setFlash(false);
         }}
       >
-        <div ref={fillRef} className={styles.fill} aria-hidden="true" />
+        <div
+          ref={fillRef}
+          data-signet-fill=""
+          className={styles.fill}
+          aria-hidden="true"
+        />
         <span className={styles.label}>
           <span
             key={label}
