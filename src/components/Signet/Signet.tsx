@@ -3,8 +3,11 @@ import {
   useEffect,
   useRef,
   useState,
+  type ComponentPropsWithoutRef,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
+  type Ref,
 } from "react";
 import { Spring } from "./spring.ts";
 import {
@@ -64,10 +67,36 @@ export interface SignetLabels {
   undo?: string;
 }
 
-interface SignetProps {
+/**
+ * Everything the component drives itself. Listed rather than silently ignored,
+ * so the type says which parts of the button are not yours to set.
+ */
+type OwnedButtonProps =
+  | "children"
+  | "type"
+  | "disabled"
+  | "onClick"
+  | "onKeyDown"
+  | "onKeyUp"
+  | "onPointerDown"
+  | "onPointerUp"
+  | "onPointerCancel"
+  | "onLostPointerCapture"
+  | "onContextMenu"
+  | "onAnimationEnd";
+
+interface SignetProps
+  extends Omit<ComponentPropsWithoutRef<"button">, OwnedButtonProps> {
   labels: SignetLabels;
   mode?: SignetMode;
   onConfirm?: () => void;
+  /** Forwarded to the underlying button. */
+  ref?: Ref<HTMLButtonElement>;
+  /**
+   * Merged onto the button. `transform` is rewritten every frame by the press
+   * spring, so setting it here will not survive.
+   */
+  style?: CSSProperties;
   /**
    * How long the button must be held before the action commits, in ms.
    * @default 1100
@@ -106,6 +135,9 @@ function Signet({
   holdDuration = FILL_DURATION_MS,
   undoWindow = UNDO_WINDOW_MS,
   slipForgiveness = SLIP_FORGIVENESS,
+  ref,
+  className,
+  ...rest
 }: SignetProps) {
   const mode = usePointerMode(modeOverride);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -121,6 +153,20 @@ function Signet({
   configRef.current = { holdDuration, undoWindow, slipForgiveness };
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+
+  // The press spring writes to the button every frame, so the internal ref has
+  // to survive whatever the consumer passes in.
+  const attachButton = useCallback(
+    (node: HTMLButtonElement | null) => {
+      buttonRef.current = node;
+      if (typeof ref === "function") {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    },
+    [ref],
+  );
 
   const anim = useRef<AnimState>(null);
   if (anim.current === null) {
@@ -396,12 +442,15 @@ function Signet({
   return (
     <div className={styles.signet} data-signet="" data-mode={mode}>
       <button
-        ref={buttonRef}
+        {...rest}
+        ref={attachButton}
         type="button"
         data-signet-button=""
         data-phase={phase}
         data-mode={mode}
-        className={[styles.button, flash ? styles.flash : ""].join(" ")}
+        className={[styles.button, flash ? styles.flash : "", className]
+          .filter(Boolean)
+          .join(" ")}
         disabled={phase === "confirmed"}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
