@@ -11,7 +11,7 @@ import styles from "./Signet.module.css";
 
 export type SignetMode = "hold" | "undo";
 
-type Phase = "idle" | "holding" | "draining" | "undoing" | "paid";
+type Phase = "idle" | "holding" | "draining" | "undoing" | "confirmed";
 type Icon = "ring" | "check" | "none";
 
 const FILL_DURATION_MS = 1100;
@@ -22,6 +22,7 @@ const DRAIN_SPEED_FACTOR = 2.6;
 const SLIP_FORGIVENESS = 0.92;
 const QUICK_TAP_MS = 200;
 const UNDO_WINDOW_MS = 5000;
+const UNDO_WINDOW_SECONDS = Math.round(UNDO_WINDOW_MS / 1000);
 const HOLD_SCALE = 0.96;
 // Ease-out exponent: the last stretch of the fill decelerates so it feels earned.
 const FILL_END_EASE = 1.4;
@@ -54,10 +55,24 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+export interface SignetLabels {
+  /** Resting label in undo mode, where a single press commits. */
+  action: string;
+  /** Resting label in hold mode, which should name the gesture. */
+  hold: string;
+  /** Terminal label once the action is committed. */
+  confirmed: string;
+  /**
+   * Label shown while the undo window is open.
+   * @default "Undo"
+   */
+  undo?: string;
+}
+
 interface SignetProps {
-  amount: string;
+  labels: SignetLabels;
   mode?: SignetMode;
-  onPaid?: () => void;
+  onConfirm?: () => void;
 }
 
 interface AnimState {
@@ -73,7 +88,7 @@ interface AnimState {
   scale: Spring;
 }
 
-function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
+function Signet({ labels, mode: modeOverride, onConfirm }: SignetProps) {
   const mode = usePointerMode(modeOverride);
   const [phase, setPhase] = useState<Phase>("idle");
   const [showHint, setShowHint] = useState(false);
@@ -82,8 +97,8 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const fillRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<SVGCircleElement>(null);
-  const onPaidRef = useRef(onPaid);
-  onPaidRef.current = onPaid;
+  const onConfirmRef = useRef(onConfirm);
+  onConfirmRef.current = onConfirm;
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
@@ -103,7 +118,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
     };
   }
 
-  const commitPaid = useCallback((now: number) => {
+  const commitConfirm = useCallback((now: number) => {
     const a = anim.current!;
     a.filling = false;
     a.draining = false;
@@ -114,11 +129,11 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
     }
     a.scale.config = PRESS_SPRING;
     a.scale.target = 1;
-    setPhase("paid");
+    setPhase("confirmed");
     setShowHint(false);
     setFlash(true);
     navigator.vibrate?.(30);
-    onPaidRef.current?.();
+    onConfirmRef.current?.();
   }, []);
 
   const tick = useCallback(
@@ -131,7 +146,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
       if (a.filling) {
         a.progress = Math.min(1, a.progress + dt / FILL_DURATION_MS);
         if (a.progress >= 1) {
-          commitPaid(now);
+          commitConfirm(now);
         } else {
           active = true;
         }
@@ -151,7 +166,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
       if (a.undoStart > 0) {
         const elapsed = now - a.undoStart;
         if (elapsed >= UNDO_WINDOW_MS) {
-          commitPaid(now);
+          commitConfirm(now);
         } else {
           if (ringRef.current) {
             ringRef.current.style.strokeDashoffset = String(
@@ -187,7 +202,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
 
       a.raf = active ? requestAnimationFrame(tick) : 0;
     },
-    [commitPaid],
+    [commitConfirm],
   );
 
   const ensureRunning = useCallback(() => {
@@ -229,7 +244,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
     a.scale.target = 1;
     const now = performance.now();
     if (a.progress >= SLIP_FORGIVENESS) {
-      commitPaid(now);
+      commitConfirm(now);
       return;
     }
     a.draining = true;
@@ -238,7 +253,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
       setShowHint(true);
     }
     ensureRunning();
-  }, [commitPaid, ensureRunning]);
+  }, [commitConfirm, ensureRunning]);
 
   const startUndoWindow = useCallback(() => {
     const a = anim.current!;
@@ -269,7 +284,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
   }, [ensureRunning]);
 
   useEffect(() => {
-    if (phaseRef.current === "paid") return;
+    if (phaseRef.current === "confirmed") return;
     const a = anim.current!;
     a.filling = false;
     a.draining = false;
@@ -322,21 +337,20 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
   };
 
   const label = (() => {
-    if (phase === "paid") return "Paid";
-    if (phase === "undoing") return "Undo";
-    if (mode === "hold") return `Hold to pay ${amount}`;
-    return `Pay ${amount}`;
+    if (phase === "confirmed") return labels.confirmed;
+    if (phase === "undoing") return labels.undo ?? "Undo";
+    return mode === "hold" ? labels.hold : labels.action;
   })();
 
   const status = (() => {
-    if (phase === "paid") return "Payment complete.";
+    if (phase === "confirmed") return `${labels.confirmed}.`;
     if (phase === "undoing")
-      return "Payment sent. Press again within five seconds to undo.";
+      return `${labels.confirmed}. Press again within ${UNDO_WINDOW_SECONDS} seconds to undo.`;
     return "";
   })();
 
   const icon: Icon =
-    phase === "undoing" ? "ring" : phase === "paid" ? "check" : "none";
+    phase === "undoing" ? "ring" : phase === "confirmed" ? "check" : "none";
 
   const [swap, setSwap] = useState({
     label,
@@ -360,10 +374,10 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
         type="button"
         className={[
           styles.button,
-          phase === "paid" ? styles.paid : "",
+          phase === "confirmed" ? styles.confirmed : "",
           flash ? styles.flash : "",
         ].join(" ")}
-        disabled={phase === "paid"}
+        disabled={phase === "confirmed"}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
@@ -382,7 +396,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
             key={label}
             className={[
               styles.labelIn,
-              phase === "paid" ? styles.slowSwap : "",
+              phase === "confirmed" ? styles.slowSwap : "",
             ].join(" ")}
           >
             {phase === "undoing" && (
@@ -410,7 +424,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
                 />
               </svg>
             )}
-            {phase === "paid" && (
+            {phase === "confirmed" && (
               <svg
                 className={styles.check}
                 viewBox="0 0 20 20"
@@ -428,7 +442,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
               key={swap.ghostKey}
               className={[
                 styles.labelOut,
-                phase === "paid" ? styles.slowSwap : "",
+                phase === "confirmed" ? styles.slowSwap : "",
               ].join(" ")}
               aria-hidden="true"
               onAnimationEnd={() =>
@@ -480,7 +494,7 @@ function Signet({ amount, mode: modeOverride, onPaid }: SignetProps) {
         data-visible={showHint || undefined}
         aria-hidden={!showHint}
       >
-        Press and hold to pay
+        Press and hold to confirm
       </p>
       <p className={styles.status} role="status">
         {status}

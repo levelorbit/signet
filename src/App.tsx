@@ -8,23 +8,20 @@ const MODES = [
   { value: "undo", label: "Undo" },
 ] as const;
 
-const ORDER = [
-  { name: "Wax seal kit", price: 24 },
-  { name: "Shipping", price: 3.5 },
+const REPOSITORY = "levelorbit/signet";
+
+const CONSEQUENCES = [
+  "48 issues and 12 pull requests",
+  "3 deploy keys and 2 webhooks",
+  "the entire commit history",
 ];
-
-const TOTAL = ORDER.reduce((sum, line) => sum + line.price, 0);
-
-function formatUSD(value: number): string {
-  return value.toLocaleString("en-US", { style: "currency", currency: "USD" });
-}
 
 type ModeChoice = (typeof MODES)[number]["value"];
 
 function App() {
   const [modeChoice, setModeChoice] = useState<ModeChoice>("auto");
   const [resetKey, setResetKey] = useState(0);
-  const [paid, setPaid] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
   const mode: SignetMode | undefined =
     modeChoice === "auto" ? undefined : modeChoice;
@@ -34,43 +31,38 @@ function App() {
       <header className={styles.header}>
         <h1 className={styles.title}>Signet</h1>
         <p className={styles.tagline}>
-          A hold-to-confirm component, adapted to handle mobile and desktop.
+          A hold-to-confirm component for destructive actions, adapted to mobile
+          and desktop.
         </p>
       </header>
 
-      <section className={styles.card} aria-label="Checkout demo">
-        <div className={styles.lines}>
-          {ORDER.map(({ name, price }) => (
-            <div key={name} className={styles.item}>
-              <div>{name}</div>
-              <div className={styles.itemPrice}>{formatUSD(price)}</div>
-            </div>
-          ))}
-          <div className={styles.total}>
-            <div>Total</div>
-            <div className={styles.totalPrice}>{formatUSD(TOTAL)}</div>
-          </div>
+      <section className={styles.card} aria-labelledby="danger-heading">
+        <div className={styles.cardHeader}>
+          <span className={styles.dangerBadge}>Danger zone</span>
+          <h2 id="danger-heading" className={styles.cardTitle}>
+            Delete this repository
+          </h2>
+          <p className={styles.repository}>{REPOSITORY}</p>
         </div>
-        <div className={styles.payment}>
-          <svg
-            className={styles.cardIcon}
-            viewBox="0 0 28 18"
-            width="28"
-            height="18"
-            aria-hidden="true"
-          >
-            <rect x="0.5" y="0.5" width="27" height="17" rx="3" />
-            <circle cx="11" cy="9" r="4.5" />
-            <circle cx="17" cy="9" r="4.5" />
-          </svg>
-          <span>Mastercard ···· 4242</span>
-          <span className={styles.paymentSaved}>Saved</span>
+
+        <div className={styles.consequences}>
+          <p className={styles.consequencesIntro}>This permanently removes:</p>
+          <ul className={styles.consequenceList}>
+            {CONSEQUENCES.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
         </div>
+
         <Signet
           key={resetKey}
-          amount={formatUSD(TOTAL)}
+          labels={{
+            action: "Delete repository",
+            hold: "Hold to delete",
+            confirmed: "Deleted",
+          }}
           mode={mode}
-          onPaid={() => setPaid(true)}
+          onConfirm={() => setDeleted(true)}
         />
       </section>
 
@@ -93,10 +85,10 @@ function App() {
         <button
           type="button"
           className={styles.reset}
-          disabled={!paid}
+          disabled={!deleted}
           onClick={() => {
             setResetKey((key) => key + 1);
-            setPaid(false);
+            setDeleted(false);
           }}
         >
           Reset demo
@@ -110,7 +102,12 @@ function App() {
           target="_blank"
           rel="noreferrer"
         >
-          <svg className={styles.githubIcon} width="18" height="18" aria-hidden="true">
+          <svg
+            className={styles.githubIcon}
+            width="18"
+            height="18"
+            aria-hidden="true"
+          >
             <use href="/icons.svg#github-icon" />
           </svg>
           Open on GitHub

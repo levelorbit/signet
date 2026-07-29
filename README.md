@@ -1,6 +1,7 @@
 # Signet
 
-A hold-to-confirm button for React, adapted to mobile and desktop.
+A hold-to-confirm button for React, for destructive actions that deserve more
+friction than a click and less than typing the resource's name.
 
 - **Hold** — press and hold to confirm.
 - **Undo** — tap once to confirm, tap again within a few seconds to undo.

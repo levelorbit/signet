@@ -16,7 +16,11 @@
   --color-border-strong: oklch(0.85 0 0);
   --color-surface-hover: oklch(0.95 0 0);
   --color-progress: oklch(0.55 0 0);
-  --color-paid: oklch(0.45 0 0);
+  --color-confirmed: oklch(0.45 0 0);
+
+  --color-danger: oklch(0.47 0.18 26);
+  --color-danger-border: oklch(0.88 0.06 26);
+  --color-danger-surface: oklch(0.97 0.02 26);
 }
 
 * {
