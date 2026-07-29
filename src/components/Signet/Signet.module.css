@@ -39,8 +39,8 @@
   cursor: default;
 }
 
-.button.paid {
-  background: var(--color-paid);
+.button.confirmed {
+  background: var(--color-confirmed);
 }
 
 .fill {
@@ -53,8 +53,8 @@
   pointer-events: none;
 }
 
-.paid .fill {
-  background: var(--color-paid);
+.confirmed .fill {
+  background: var(--color-confirmed);
 }
 
 .label {
@@ -90,7 +90,7 @@
   animation: label-out 200ms ease-out;
 }
 
-/* A completed payment deserves more weight than an ordinary label shift. */
+/* A committed action deserves more weight than an ordinary label shift. */
 .labelIn.slowSwap,
 .labelOut.slowSwap {
   animation-duration: 450ms;

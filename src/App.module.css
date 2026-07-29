@@ -61,71 +61,62 @@
   gap: var(--space-lg);
   padding: var(--space-lg);
   background: var(--color-bg);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-danger-border);
   border-radius: 16px;
   box-shadow: 0 8px 24px oklch(0 0 0 / 0.06);
 }
 
-.lines {
+.cardHeader {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-sm);
 }
 
-.item {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-md);
+.dangerBadge {
+  padding: 2px var(--space-sm);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-danger);
+  background: var(--color-danger-surface);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 999px;
 }
 
-.itemPrice {
-  font-variant-numeric: tabular-nums;
+.cardTitle {
+  margin: 0;
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+}
+
+.repository {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
   color: var(--color-muted);
 }
 
-.total {
+.consequences {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--space-md);
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--color-border);
-  font-weight: 600;
-}
-
-.totalPrice {
-  font-variant-numeric: tabular-nums;
-}
-
-.payment {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+  flex-direction: column;
+  gap: var(--space-xs);
   font-size: 0.9rem;
+  color: var(--color-muted);
 }
 
-.cardIcon rect {
-  fill: none;
-  stroke: var(--color-border-strong);
+.consequencesIntro {
+  margin: 0;
 }
 
-.cardIcon circle {
-  fill: var(--color-muted);
-}
-
-.cardIcon circle:last-of-type {
-  fill: var(--color-faint);
-  fill-opacity: 0.85;
-}
-
-.paymentSaved {
-  margin-left: auto;
-  padding: 2px var(--space-sm);
-  font-size: 0.75rem;
-  color: var(--color-faint);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
+.consequenceList {
+  margin: 0;
+  padding-left: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.5;
 }
 
 .controls {
