@@ -39,7 +39,7 @@
   cursor: default;
 }
 
-.button.confirmed {
+.button[data-phase="confirmed"] {
   background: var(--color-confirmed);
 }
 
@@ -53,7 +53,7 @@
   pointer-events: none;
 }
 
-.confirmed .fill {
+.button[data-phase="confirmed"] .fill {
   background: var(--color-confirmed);
 }
 
