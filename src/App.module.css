@@ -130,15 +130,13 @@
 
 .controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-md);
   flex-wrap: wrap;
 }
 
 .modes {
-  display: flex;
-  gap: var(--space-md);
   margin: 0;
   padding: 0;
   border: none;
@@ -151,12 +149,84 @@
   color: var(--color-faint);
 }
 
+.switcher {
+  --switcher-inset: 3px;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: var(--switcher-inset);
+  background: var(--color-border);
+  border-radius: 10px;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.thumb {
+  position: absolute;
+  z-index: 0;
+  top: var(--switcher-inset);
+  bottom: var(--switcher-inset);
+  left: var(--switcher-inset);
+  width: calc((100% - 2 * var(--switcher-inset)) / 3);
+  background: var(--color-bg);
+  border-radius: 7px;
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 0.1),
+    0 0 0 1px oklch(0 0 0 / 0.04);
+  pointer-events: none;
+  /* Translate and scale, not left/width: keeps the thumb on the compositor. */
+  will-change: transform;
+}
+
 .modeOption {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: 0.9rem;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-width: 0;
   cursor: pointer;
+}
+
+.modeInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.modeLabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 2.375rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-faint);
+  border-radius: 7px;
+  transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modeOption:hover .modeLabel {
+  color: var(--color-muted);
+}
+
+.modeOption:has(:checked) .modeLabel {
+  color: var(--color-ink);
+}
+
+.modeInput:focus-visible + .modeLabel {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modeLabel {
+    transition: none;
+  }
 }
 
 .reset {
