@@ -1,19 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Signet favicon">
-  <!-- Progress ring: open arc with a ~60° gap centered at the top-left -->
-  <path
-    d="M 12.635 3.443 A 13 13 0 1 1 3.443 12.635"
-    fill="none"
-    stroke="#863bff"
-    stroke-width="4"
-    stroke-linecap="round"
-  />
-  <!-- Checkmark confirmation -->
-  <polyline
-    points="10,16.5 14.5,21 22.5,11.5"
-    fill="none"
-    stroke="#863bff"
-    stroke-width="4"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-  />
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Signet">
+  <!--
+    A signet is a seal. The impression is the pay button mid-fill, so
+    the mark is the name and the control at once.
+  -->
+  <defs>
+    <clipPath id="impression">
+      <rect x="6" y="11" width="20" height="10" rx="2"/>
+    </clipPath>
+  </defs>
+  <style>
+    .seal { fill: #1a1a1a; }
+    .track { fill: #fff; fill-opacity: 0.22; }
+    .fill { fill: #fff; }
+    @media (prefers-color-scheme: dark) {
+      .seal { fill: #f4f4f5; }
+      .track { fill: #1a1a1a; fill-opacity: 0.18; }
+      .fill { fill: #1a1a1a; }
+    }
+  </style>
+  <circle class="seal" cx="16" cy="16" r="14"/>
+  <rect class="track" x="6" y="11" width="20" height="10" rx="2"/>
+  <rect class="fill" x="6" y="11" width="13" height="10" clip-path="url(#impression)"/>
 </svg>
