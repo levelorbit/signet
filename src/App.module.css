@@ -60,6 +60,8 @@
   flex-direction: column;
   gap: var(--space-lg);
   padding: var(--space-lg);
+  /* Hint sits in this padding, so the bottom needs more than the sides. */
+  padding-bottom: var(--space-xl);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: 16px;
