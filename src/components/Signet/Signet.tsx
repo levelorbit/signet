@@ -449,7 +449,7 @@ function Signet({
   const label = (() => {
     if (phase === "paid") return "Paid";
     if (phase === "processing") return "Paying";
-    if (phase === "failed") return "Payment failed. Retry";
+    if (phase === "failed") return "Retry";
     if (phase === "undoing") return "Undo";
     if (mode === "hold") return `Hold to pay ${amount}`;
     return `Pay ${amount}`;
@@ -586,8 +586,12 @@ function Signet({
           )}
         </span>
       </button>
-      <p className={styles.hint} data-visible={showHint || undefined} aria-hidden={!showHint}>
-        Press and hold to pay
+      <p
+        className={styles.hint}
+        data-visible={showHint || phase === "failed" || undefined}
+        aria-hidden={phase === "failed" || !showHint}
+      >
+        {phase === "failed" ? "Payment failed" : "Press and hold to pay"}
       </p>
       <p className={styles.status} role="status">
         {status}
