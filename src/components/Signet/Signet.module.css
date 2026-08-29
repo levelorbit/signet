@@ -6,6 +6,7 @@
 }
 
 .button {
+  --overlay: 0;
   position: relative;
   isolation: isolate;
   overflow: hidden;
@@ -15,7 +16,7 @@
   font: inherit;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--color-bg);
+  color: var(--color-on-ink);
   background: var(--color-ink);
   cursor: pointer;
   touch-action: none;
@@ -28,16 +29,24 @@
     background-color 160ms ease;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .button:hover:not(:disabled):not(.processing):not(.failed) {
-    background: var(--color-ink-hover);
-    box-shadow: 0 4px 14px oklch(0 0 0 / 0.18);
-  }
+.button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: oklch(1 0 0 / var(--overlay));
+  pointer-events: none;
+}
 
-  .button.failed:hover:not(:disabled) {
-    background: var(--color-fail-hover);
+@media (hover: hover) and (pointer: fine) {
+  .button:hover:not(:disabled):not(.processing) {
+    --overlay: var(--overlay-hover);
     box-shadow: 0 4px 14px oklch(0 0 0 / 0.18);
   }
+}
+
+.button:active:not(:disabled):not(.processing):not(.paid) {
+  --overlay: var(--overlay-press);
 }
 
 .button:focus-visible {
@@ -65,7 +74,7 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: var(--color-progress);
+  background: var(--overlay-progress);
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
@@ -73,12 +82,9 @@
   transition: background-color 160ms ease;
 }
 
-.paid .fill {
-  background: var(--color-paid-fill);
-}
-
+.paid .fill,
 .failed .fill {
-  background: var(--color-fail-fill);
+  background: var(--overlay-progress-end);
 }
 
 /*
@@ -192,14 +198,14 @@
 
 .ringArc {
   fill: none;
-  stroke: var(--color-bg);
+  stroke: var(--color-on-ink);
   stroke-width: 2.5;
   stroke-linecap: round;
 }
 
 .check {
   fill: none;
-  stroke: var(--color-bg);
+  stroke: var(--color-on-ink);
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -267,7 +273,7 @@
   margin: 0;
   font-size: 0.85rem;
   text-align: center;
-  color: var(--color-faint);
+  color: var(--color-muted);
   opacity: 0;
   transition: opacity 200ms var(--ease-out);
 }

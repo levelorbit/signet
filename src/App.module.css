@@ -27,13 +27,13 @@
   align-items: center;
   gap: var(--space-xs);
   font-size: 0.9rem;
-  color: var(--color-faint);
+  color: var(--color-muted);
   text-decoration: none;
   transition: color 150ms ease;
 }
 
 .githubLink:hover {
-  color: var(--color-muted);
+  color: var(--color-ink);
   text-decoration: underline;
 }
 
@@ -107,7 +107,7 @@
 
 .cardIcon rect {
   fill: none;
-  stroke: var(--color-border-strong);
+  stroke: var(--color-stroke);
 }
 
 .cardIcon circle {
@@ -115,15 +115,14 @@
 }
 
 .cardIcon circle:last-of-type {
-  fill: var(--color-faint);
-  fill-opacity: 0.85;
+  fill: var(--color-stroke);
 }
 
 .paymentSaved {
   margin-left: auto;
   padding: 2px var(--space-sm);
   font-size: 0.75rem;
-  color: var(--color-faint);
+  color: var(--color-muted);
   border: 1px solid var(--color-border);
   border-radius: 999px;
 }
@@ -153,7 +152,7 @@
   padding: 0;
   margin-bottom: var(--space-xs);
   font-size: 0.8rem;
-  color: var(--color-faint);
+  color: var(--color-muted);
 }
 
 .switcher {
@@ -164,7 +163,7 @@
   display: grid;
   grid-template-columns: repeat(var(--switcher-cols), minmax(0, 1fr));
   padding: var(--switcher-inset);
-  background: var(--color-border);
+  background: var(--color-fill);
   border-radius: 10px;
   user-select: none;
   touch-action: manipulation;
@@ -213,13 +212,13 @@
   padding: 0.25rem 0.75rem;
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--color-faint);
+  color: var(--color-muted);
   border-radius: 7px;
   transition: color 180ms var(--ease-out);
 }
 
 .modeOption:hover .modeLabel {
-  color: var(--color-muted);
+  color: var(--color-ink);
 }
 
 .modeOption:has(:checked) .modeLabel {
@@ -238,7 +237,7 @@
 }
 
 .reset {
-  border: 1px solid var(--color-border-strong);
+  border: 1px solid var(--color-stroke);
   border-radius: 8px;
   padding: var(--space-xs) var(--space-md);
   font: inherit;
@@ -249,7 +248,11 @@
 }
 
 .reset:hover:not(:disabled) {
-  background: var(--color-surface-hover);
+  background: var(--color-fill);
+}
+
+.reset:active:not(:disabled) {
+  background: var(--color-border);
 }
 
 .reset:disabled {

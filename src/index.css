@@ -7,21 +7,25 @@
   --space-2xl: 3rem; /* 48px */
   --space-3xl: 4rem; /* 64px */
 
+  /* Surfaces stay opaque. Foreground greys are black at alpha so they mix
+     with whatever they sit on (Practical UI, transparent palette). */
   --color-bg: oklch(1 0 0);
-  --color-ink: oklch(0.2 0 0);
-  --color-ink-hover: oklch(0.28 0 0);
-  --color-muted: oklch(0.5 0 0);
-  /* 0.60 failed WCAG 4.5:1 on white at 0.85rem (3.95, APCA Lc 67). 0.54 is 5.06 / Lc 75. */
-  --color-faint: oklch(0.54 0 0);
-  --color-border: oklch(0.92 0 0);
-  --color-border-strong: oklch(0.85 0 0);
-  --color-surface-hover: oklch(0.95 0 0);
-  --color-progress: oklch(0.55 0 0);
+
+  --color-ink: oklch(0 0 0 / 0.9);
+  --color-muted: oklch(0 0 0 / 0.6);
+  --color-stroke: oklch(0 0 0 / 0.45);
+  --color-border: oklch(0 0 0 / 0.1);
+  --color-fill: oklch(0 0 0 / 0.04);
+
+  /* The pay button is a dark surface: white overlays, not new greys. */
+  --color-on-ink: oklch(1 0 0);
+  --overlay-hover: 0.06;
+  --overlay-press: 0.12;
+  --overlay-progress: oklch(1 0 0 / 0.2);
+  --overlay-progress-end: oklch(1 0 0 / 0.12);
+
   --color-paid: oklch(0.32 0.03 160);
-  --color-paid-fill: oklch(0.38 0.035 160);
   --color-fail: oklch(0.4 0.08 28);
-  --color-fail-hover: oklch(0.44 0.08 28);
-  --color-fail-fill: oklch(0.46 0.085 28);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
