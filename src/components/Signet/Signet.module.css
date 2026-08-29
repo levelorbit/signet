@@ -7,6 +7,7 @@
 
 .button {
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   border: none;
   border-radius: 12px;
@@ -22,12 +23,21 @@
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
   will-change: transform;
-  transition: box-shadow 160ms ease, background-color 160ms ease;
+  transition:
+    box-shadow 160ms ease,
+    background-color 160ms ease;
 }
 
-.button:hover:not(:disabled) {
-  background: var(--color-ink-hover);
-  box-shadow: 0 4px 14px oklch(0 0 0 / 0.18);
+@media (hover: hover) and (pointer: fine) {
+  .button:hover:not(:disabled):not(.processing):not(.failed) {
+    background: var(--color-ink-hover);
+    box-shadow: 0 4px 14px oklch(0 0 0 / 0.18);
+  }
+
+  .button.failed:hover:not(:disabled) {
+    background: var(--color-fail-hover);
+    box-shadow: 0 4px 14px oklch(0 0 0 / 0.18);
+  }
 }
 
 .button:focus-visible {
@@ -39,26 +49,82 @@
   cursor: default;
 }
 
+.button.processing {
+  cursor: default;
+}
+
 .button.paid {
   background: var(--color-paid);
+}
+
+.button.failed {
+  background: var(--color-fail);
 }
 
 .fill {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background: var(--color-progress);
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
   pointer-events: none;
+  transition: background-color 160ms ease;
 }
 
 .paid .fill {
-  background: var(--color-paid);
+  background: var(--color-paid-fill);
+}
+
+.failed .fill {
+  background: var(--color-fail-fill);
+}
+
+/*
+  A sheen is a highlight band that crosses the control. Translating a full-size
+  overlay by a fraction of itself (and mixing in background-size) just pulses in
+  place. Own-size translate from -100% to 100%, linear, is the sweep.
+*/
+.sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 36%,
+    oklch(1 0 0 / 0.18) 50%,
+    transparent 64%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  transition: opacity 200ms var(--ease-out);
+}
+
+.processing .sheen {
+  opacity: 1;
+  animation: sheen 1.45s linear infinite;
+}
+
+.glint {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: oklch(1 0 0);
+  opacity: 0;
+}
+
+.flash .glint {
+  animation: flash 200ms var(--ease-out);
 }
 
 .label {
   position: relative;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -75,7 +141,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  animation: label-in 200ms ease-out;
+  animation: label-in 200ms var(--ease-out);
 }
 
 .labelOut {
@@ -87,13 +153,13 @@
   gap: var(--space-sm);
   opacity: 0;
   pointer-events: none;
-  animation: label-out 200ms ease-out;
+  animation: label-out 200ms var(--ease-out);
 }
 
-/* A completed payment deserves more weight than an ordinary label shift. */
+/* Paid is rare enough for a longer crossfade, still inside the 300ms UI budget. */
 .labelIn.slowSwap,
 .labelOut.slowSwap {
-  animation-duration: 450ms;
+  animation-duration: 250ms;
 }
 
 @keyframes label-in {
@@ -139,24 +205,57 @@
   stroke-linejoin: round;
 }
 
-.flash {
-  animation: flash 260ms ease-out;
+@keyframes flash {
+  from {
+    opacity: 0.42;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
-@keyframes flash {
-  0% {
-    filter: brightness(1.7);
+@keyframes sheen {
+  from {
+    transform: translateX(-100%);
   }
-  100% {
-    filter: brightness(1);
+  to {
+    transform: translateX(100%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flash,
-  .labelIn,
+  .labelIn {
+    animation: label-in-reduced 200ms ease;
+  }
+
   .labelOut {
+    animation: label-out-reduced 200ms ease;
+  }
+
+  .flash .glint {
     animation: none;
+  }
+
+  .processing .sheen {
+    animation: none;
+    opacity: 0.14;
+    transform: none;
+    background: oklch(1 0 0 / 0.1);
+  }
+}
+
+@keyframes label-in-reduced {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes label-out-reduced {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 
@@ -170,7 +269,7 @@
   text-align: center;
   color: var(--color-faint);
   opacity: 0;
-  transition: opacity 200ms ease;
+  transition: opacity 200ms var(--ease-out);
 }
 
 .hint[data-visible] {

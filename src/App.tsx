@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Signet, { type SignetMode } from "./components/Signet/Signet.tsx";
 import { Spring } from "./components/Signet/spring.ts";
 import styles from "./App.module.css";
@@ -8,6 +8,14 @@ const MODES = [
   { value: "hold", label: "Hold" },
   { value: "undo", label: "Undo" },
 ] as const;
+
+const OUTCOMES = [
+  { value: "ok", label: "Succeed" },
+  { value: "fail", label: "Fail" },
+] as const;
+
+// Long enough for the processing sheen to read as a charge in flight.
+const PAY_DELAY_MS = 900;
 
 const ORDER = [
   { name: "Wax seal kit", price: 24 },
@@ -21,6 +29,7 @@ function formatUSD(value: number): string {
 }
 
 type ModeChoice = (typeof MODES)[number]["value"];
+type Outcome = (typeof OUTCOMES)[number]["value"];
 
 const THUMB_SPRING = { stiffness: 380, damping: 34 };
 
@@ -62,14 +71,70 @@ function useThumbSpring(index: number) {
   return thumbRef;
 }
 
-function App() {
-  const [modeChoice, setModeChoice] = useState<ModeChoice>("auto");
-  const [resetKey, setResetKey] = useState(0);
-  const [paid, setPaid] = useState(false);
-  const selectedIndex = MODES.findIndex((mode) => mode.value === modeChoice);
+function Segmented<T extends string>({
+  name,
+  legend,
+  value,
+  options,
+  onChange,
+}: {
+  name: string;
+  legend: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  const selectedIndex = options.findIndex((option) => option.value === value);
   const thumbRef = useThumbSpring(selectedIndex);
 
+  return (
+    <fieldset className={styles.modes}>
+      <legend className={styles.modesLegend}>{legend}</legend>
+      <div
+        className={styles.switcher}
+        style={{ "--switcher-cols": options.length } as CSSProperties}
+      >
+        <span ref={thumbRef} className={styles.thumb} aria-hidden="true" />
+        {options.map(({ value: option, label }) => (
+          <label key={option} className={styles.modeOption}>
+            <input
+              className={styles.modeInput}
+              type="radio"
+              name={name}
+              value={option}
+              checked={value === option}
+              onChange={() => onChange(option)}
+            />
+            <span className={styles.modeLabel}>{label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function App() {
+  const [modeChoice, setModeChoice] = useState<ModeChoice>("auto");
+  const [outcome, setOutcome] = useState<Outcome>("ok");
+  const [resetKey, setResetKey] = useState(0);
+  const [paid, setPaid] = useState(false);
+  const outcomeRef = useRef(outcome);
+  outcomeRef.current = outcome;
+
   const mode: SignetMode | undefined = modeChoice === "auto" ? undefined : modeChoice;
+
+  const onPay = useCallback(() => {
+    return new Promise<void>((resolve, reject) => {
+      window.setTimeout(() => {
+        if (outcomeRef.current === "ok") {
+          setPaid(true);
+          resolve();
+        } else {
+          reject(new Error("Payment failed"));
+        }
+      }, PAY_DELAY_MS);
+    });
+  }, []);
 
   return (
     <main className={styles.page}>
@@ -108,29 +173,26 @@ function App() {
           <span>Mastercard ···· 4242</span>
           <span className={styles.paymentSaved}>Saved</span>
         </div>
-        <Signet key={resetKey} amount={formatUSD(TOTAL)} mode={mode} onPaid={() => setPaid(true)} />
+        <Signet key={resetKey} amount={formatUSD(TOTAL)} mode={mode} onPay={onPay} />
       </section>
 
       <div className={styles.controls}>
-        <fieldset className={styles.modes}>
-          <legend className={styles.modesLegend}>Pointer mode</legend>
-          <div className={styles.switcher}>
-            <span ref={thumbRef} className={styles.thumb} aria-hidden="true" />
-            {MODES.map(({ value, label }) => (
-              <label key={value} className={styles.modeOption}>
-                <input
-                  className={styles.modeInput}
-                  type="radio"
-                  name="mode"
-                  value={value}
-                  checked={modeChoice === value}
-                  onChange={() => setModeChoice(value)}
-                />
-                <span className={styles.modeLabel}>{label}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <div className={styles.controlGroup}>
+          <Segmented
+            name="mode"
+            legend="Pointer mode"
+            value={modeChoice}
+            options={MODES}
+            onChange={setModeChoice}
+          />
+          <Segmented
+            name="outcome"
+            legend="Charge"
+            value={outcome}
+            options={OUTCOMES}
+            onChange={setOutcome}
+          />
+        </div>
         <button
           type="button"
           className={styles.reset}

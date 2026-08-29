@@ -136,6 +136,13 @@
   flex-wrap: wrap;
 }
 
+.controlGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-md);
+}
+
 .modes {
   margin: 0;
   padding: 0;
@@ -151,10 +158,11 @@
 
 .switcher {
   --switcher-inset: 3px;
+  --switcher-cols: 3;
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--switcher-cols), minmax(0, 1fr));
   padding: var(--switcher-inset);
   background: var(--color-border);
   border-radius: 10px;
@@ -168,7 +176,7 @@
   top: var(--switcher-inset);
   bottom: var(--switcher-inset);
   left: var(--switcher-inset);
-  width: calc((100% - 2 * var(--switcher-inset)) / 3);
+  width: calc((100% - 2 * var(--switcher-inset)) / var(--switcher-cols));
   background: var(--color-bg);
   border-radius: 7px;
   box-shadow:
@@ -207,7 +215,7 @@
   font-weight: 500;
   color: var(--color-faint);
   border-radius: 7px;
-  transition: color 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: color 180ms var(--ease-out);
 }
 
 .modeOption:hover .modeLabel {
