@@ -140,9 +140,7 @@ function App() {
     <main className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.title}>Signet</h1>
-        <p className={styles.tagline}>
-          A hold-to-confirm component, adapted to handle mobile and desktop.
-        </p>
+        <p className={styles.tagline}>From click to receipt.</p>
       </header>
 
       <section className={styles.card} aria-label="Checkout demo">
