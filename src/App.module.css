@@ -30,7 +30,7 @@
   font-size: 0.9rem;
   color: var(--color-muted);
   text-decoration: none;
-  transition: color 150ms ease;
+  transition: color 150ms var(--ease-out);
   touch-action: manipulation;
 }
 
@@ -250,12 +250,6 @@
   outline-offset: 2px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .modeLabel {
-    transition: none;
-  }
-}
-
 .reset {
   display: inline-flex;
   align-items: center;
@@ -271,6 +265,10 @@
   color: inherit;
   cursor: pointer;
   touch-action: manipulation;
+  transition:
+    background-color 150ms var(--ease-out),
+    opacity 150ms var(--ease-out),
+    scale 150ms var(--ease-out);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -281,9 +279,22 @@
 
 .reset:active:not(:disabled) {
   background: var(--color-border);
+  scale: 0.96;
 }
 
 .reset:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modeLabel,
+  .reset,
+  .githubLink {
+    transition: none;
+  }
+
+  .reset:active:not(:disabled) {
+    scale: 1;
+  }
 }

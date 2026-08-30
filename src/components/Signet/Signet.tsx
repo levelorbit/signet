@@ -16,8 +16,8 @@ type Phase = "idle" | "holding" | "draining" | "undoing" | "processing" | "paid"
 type Icon = "ring" | "check" | "none";
 
 const FILL_DURATION_MS = 1100;
-const FINISH_DURATION_MS = 250;
-const PROCESSING_FILL_MS = 180;
+const FINISH_DURATION_MS = 200;
+const PROCESSING_FILL_MS = 200;
 const FAIL_DRAIN_MS = 200;
 // Letting go is the system responding: snappy, not a reverse of the 1.1s hold.
 const RELEASE_MS = 200;
@@ -56,6 +56,41 @@ function usePointerMode(override?: SignetMode): SignetMode {
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function Glyph({
+  icon,
+  ringRef,
+  ringOffset = "0",
+}: {
+  icon: Icon;
+  ringRef?: Ref<SVGCircleElement>;
+  ringOffset?: string;
+}) {
+  if (icon === "ring") {
+    return (
+      <svg className={styles.ring} viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+        <circle className={styles.ringTrack} cx="10" cy="10" r={RING_RADIUS} />
+        <circle
+          ref={ringRef}
+          className={styles.ringArc}
+          cx="10"
+          cy="10"
+          r={RING_RADIUS}
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={ringOffset}
+        />
+      </svg>
+    );
+  }
+  if (icon === "check") {
+    return (
+      <svg className={styles.check} viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+        <path d="M4 10.5 8.5 15 16 6" />
+      </svg>
+    );
+  }
+  return null;
 }
 
 interface SignetProps {
@@ -333,8 +368,6 @@ function Signet({
     a.filling = true;
     a.draining = false;
     a.holdStart = performance.now();
-    a.scale.config = PRESS_SPRING;
-    a.scale.target = prefersReducedMotion() ? 1 : HOLD_SCALE;
     setPhase("holding");
     setShowHint(false);
     ensureRunning();
@@ -344,8 +377,6 @@ function Signet({
     const a = anim.current!;
     if (!a.filling) return;
     a.filling = false;
-    a.scale.config = PRESS_SPRING;
-    a.scale.target = 1;
     const now = performance.now();
     if (a.progress >= SLIP_FORGIVENESS) {
       startProcessing(now);
@@ -365,6 +396,7 @@ function Signet({
     a.draining = false;
     // Start full so the window has a bar to drain, instead of blanking on tap.
     a.progress = 1;
+    if (fillRef.current) fillRef.current.style.transform = "scaleX(1)";
     a.scale.target = 1;
     a.undoStart = performance.now();
     if (ringRef.current) {
@@ -379,13 +411,14 @@ function Signet({
     const a = anim.current!;
     if (a.undoStart === 0) return;
     a.undoStart = 0;
-    a.progress = 0;
+    // Recede the remaining bar instead of popping it off.
+    a.draining = true;
     a.scale.config = SETTLE_SPRING;
     a.scale.target = 1;
     if (!prefersReducedMotion()) {
       a.scale.velocity = -SETTLE_KICK_VELOCITY;
     }
-    setPhase("idle");
+    setPhase("draining");
     ensureRunning();
   }, [ensureRunning]);
 
@@ -415,14 +448,25 @@ function Signet({
 
   const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     if (locked || event.button !== 0) return;
-    if (mode !== "hold") return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    startHold();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic or already-released pointers can throw; the press should still run.
+    }
+    // Press scale is pointer-only. Keyboard Space still fills, without the dip.
+    const a = anim.current!;
+    a.scale.config = PRESS_SPRING;
+    a.scale.target = prefersReducedMotion() ? 1 : HOLD_SCALE;
+    ensureRunning();
+    if (mode === "hold") startHold();
   };
 
   const onPointerUp = () => {
-    if (mode !== "hold") return;
-    releaseHold();
+    const a = anim.current!;
+    a.scale.config = PRESS_SPRING;
+    a.scale.target = 1;
+    ensureRunning();
+    if (mode === "hold") releaseHold();
   };
 
   const onClick = () => {
@@ -490,16 +534,24 @@ function Signet({
   const [swap, setSwap] = useState({
     label,
     icon,
-    ghost: null as { label: string; icon: Icon } | null,
+    ghost: null as { label: string; icon: Icon; ringOffset: string } | null,
     ghostKey: 0,
   });
   if (swap.label !== label) {
-    setSwap({
-      label,
-      icon,
-      ghost: { label: swap.label, icon: swap.icon },
-      ghostKey: swap.ghostKey + 1,
-    });
+    if (prefersReducedMotion()) {
+      setSwap({ label, icon, ghost: null, ghostKey: swap.ghostKey });
+    } else {
+      setSwap({
+        label,
+        icon,
+        ghost: {
+          label: swap.label,
+          icon: swap.icon,
+          ringOffset: ringRef.current?.style.strokeDashoffset || "0",
+        },
+        ghostKey: swap.ghostKey + 1,
+      });
+    }
   }
 
   return (
@@ -531,79 +583,21 @@ function Signet({
         <div className={styles.glint} aria-hidden="true" onAnimationEnd={() => setFlash(false)} />
         <span className={styles.label}>
           <span
-            key={label}
-            className={[styles.labelIn, phase === "paid" ? styles.slowSwap : ""].join(" ")}
+            key={`in-${swap.ghostKey}`}
+            className={styles.face}
+            data-swap={swap.ghostKey > 0 || undefined}
           >
-            {phase === "undoing" && (
-              <svg
-                className={styles.ring}
-                viewBox="0 0 20 20"
-                width="18"
-                height="18"
-                aria-hidden="true"
-              >
-                <circle className={styles.ringTrack} cx="10" cy="10" r={RING_RADIUS} />
-                <circle
-                  ref={ringRef}
-                  className={styles.ringArc}
-                  cx="10"
-                  cy="10"
-                  r={RING_RADIUS}
-                  strokeDasharray={RING_CIRCUMFERENCE}
-                  strokeDashoffset="0"
-                />
-              </svg>
-            )}
-            {phase === "paid" && (
-              <svg
-                className={styles.check}
-                viewBox="0 0 20 20"
-                width="18"
-                height="18"
-                aria-hidden="true"
-              >
-                <path d="M4 10.5 8.5 15 16 6" />
-              </svg>
-            )}
-            {label}
+            <Glyph icon={swap.icon} ringRef={swap.icon === "ring" ? ringRef : undefined} />
+            {swap.label}
           </span>
           {swap.ghost !== null && (
             <span
-              key={swap.ghostKey}
-              className={[styles.labelOut, phase === "paid" ? styles.slowSwap : ""].join(" ")}
+              key={`out-${swap.ghostKey}`}
+              className={[styles.face, styles.faceLeave].join(" ")}
               aria-hidden="true"
               onAnimationEnd={() => setSwap((current) => ({ ...current, ghost: null }))}
             >
-              {swap.ghost.icon === "ring" && (
-                <svg
-                  className={styles.ring}
-                  viewBox="0 0 20 20"
-                  width="18"
-                  height="18"
-                  aria-hidden="true"
-                >
-                  <circle className={styles.ringTrack} cx="10" cy="10" r={RING_RADIUS} />
-                  <circle
-                    className={styles.ringArc}
-                    cx="10"
-                    cy="10"
-                    r={RING_RADIUS}
-                    strokeDasharray={RING_CIRCUMFERENCE}
-                    strokeDashoffset={RING_CIRCUMFERENCE}
-                  />
-                </svg>
-              )}
-              {swap.ghost.icon === "check" && (
-                <svg
-                  className={styles.check}
-                  viewBox="0 0 20 20"
-                  width="18"
-                  height="18"
-                  aria-hidden="true"
-                >
-                  <path d="M4 10.5 8.5 15 16 6" />
-                </svg>
-              )}
+              <Glyph icon={swap.ghost.icon} ringOffset={swap.ghost.ringOffset} />
               {swap.ghost.label}
             </span>
           )}

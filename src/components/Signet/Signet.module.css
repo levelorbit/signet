@@ -16,6 +16,7 @@
   font: inherit;
   font-size: 1rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: var(--color-on-ink);
   background: var(--color-ink);
   cursor: pointer;
@@ -25,8 +26,8 @@
   -webkit-tap-highlight-color: transparent;
   will-change: transform;
   transition:
-    box-shadow 160ms ease,
-    background-color 160ms ease;
+    background-color 200ms var(--ease-out),
+    --overlay 150ms var(--ease-out);
 }
 
 .button::after {
@@ -41,7 +42,6 @@
 @media (hover: hover) and (pointer: fine) {
   .button:hover:not(:disabled):not([aria-disabled="true"]):not(.processing) {
     --overlay: var(--overlay-hover);
-    box-shadow: 0 4px 14px oklch(0 0 0 / 0.18);
   }
 }
 
@@ -80,7 +80,7 @@
   transform-origin: left center;
   will-change: transform;
   pointer-events: none;
-  transition: background-color 160ms ease;
+  transition: background-color 200ms var(--ease-out);
 }
 
 .paid .fill,
@@ -108,12 +108,16 @@
     transparent 100%
   );
   transform: translateX(-100%);
+  /* Keep the sweep alive but paused so ending processing fades in place
+     instead of snapping the band back to -100%. */
+  animation: sheen 1.45s linear infinite;
+  animation-play-state: paused;
   transition: opacity 200ms var(--ease-out);
 }
 
 .processing .sheen {
   opacity: 1;
-  animation: sheen 1.45s linear infinite;
+  animation-play-state: running;
 }
 
 .glint {
@@ -143,44 +147,41 @@
   flex: none;
 }
 
-.labelIn {
+.face {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  animation: label-in 200ms var(--ease-out);
 }
 
-.labelOut {
+.face[data-swap] {
+  animation: face-in 200ms var(--ease-out);
+}
+
+.faceLeave {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  opacity: 0;
+  width: 100%;
   pointer-events: none;
-  animation: label-out 200ms var(--ease-out);
+  animation: face-out 150ms var(--ease-out);
 }
 
-/* Paid is rare enough for a longer crossfade, still inside the 300ms UI budget. */
-.labelIn.slowSwap,
-.labelOut.slowSwap {
-  animation-duration: 250ms;
-}
-
-@keyframes label-in {
+@keyframes face-in {
   from {
     opacity: 0;
+    transform: translateY(2px);
   }
 }
 
-@keyframes label-out {
+@keyframes face-out {
   from {
     opacity: 1;
+    transform: translateY(0);
   }
   to {
     opacity: 0;
+    transform: translateY(-2px);
   }
 }
 
@@ -228,8 +229,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .labelIn,
-  .labelOut {
+  .button,
+  .fill,
+  .sheen,
+  .hint {
+    transition: none;
+  }
+
+  .face[data-swap],
+  .faceLeave {
     animation: none;
   }
 
@@ -237,10 +245,14 @@
     animation: none;
   }
 
+  .sheen,
   .processing .sheen {
     animation: none;
-    opacity: 0.14;
     transform: none;
+  }
+
+  .processing .sheen {
+    opacity: 0.14;
     background: oklch(1 0 0 / 0.1);
   }
 }
@@ -255,11 +267,17 @@
   text-align: center;
   color: var(--color-muted);
   opacity: 0;
-  transition: opacity 200ms var(--ease-out);
+  transform: translateY(-2px);
+  pointer-events: none;
+  user-select: none;
+  transition:
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
 }
 
 .hint[data-visible] {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .status {
