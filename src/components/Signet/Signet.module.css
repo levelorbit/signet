@@ -39,13 +39,13 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .button:hover:not(:disabled):not(.processing) {
+  .button:hover:not(:disabled):not([aria-disabled="true"]):not(.processing) {
     --overlay: var(--overlay-hover);
     box-shadow: 0 4px 14px oklch(0 0 0 / 0.18);
   }
 }
 
-.button:active:not(:disabled):not(.processing):not(.paid) {
+.button:active:not(:disabled):not([aria-disabled="true"]):not(.processing):not(.paid) {
   --overlay: var(--overlay-press);
 }
 
@@ -54,7 +54,8 @@
   outline-offset: 3px;
 }
 
-.button:disabled {
+.button:disabled,
+.button[aria-disabled="true"] {
   cursor: default;
 }
 
@@ -171,18 +172,15 @@
 @keyframes label-in {
   from {
     opacity: 0;
-    filter: blur(2px);
   }
 }
 
 @keyframes label-out {
   from {
     opacity: 1;
-    filter: blur(0);
   }
   to {
     opacity: 0;
-    filter: blur(2px);
   }
 }
 
@@ -230,12 +228,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .labelIn {
-    animation: label-in-reduced 200ms ease;
-  }
-
+  .labelIn,
   .labelOut {
-    animation: label-out-reduced 200ms ease;
+    animation: none;
   }
 
   .flash .glint {
@@ -247,21 +242,6 @@
     opacity: 0.14;
     transform: none;
     background: oklch(1 0 0 / 0.1);
-  }
-}
-
-@keyframes label-in-reduced {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes label-out-reduced {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
   }
 }
 

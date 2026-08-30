@@ -63,6 +63,7 @@
   margin: 0;
   font-size: 2rem;
   letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
 .tagline {
@@ -146,11 +147,9 @@
 }
 
 .controls {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  display: grid;
+  justify-items: start;
   gap: var(--space-md);
-  flex-wrap: wrap;
 }
 
 .controlGroup {

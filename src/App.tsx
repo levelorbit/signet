@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
 import Signet, { type SignetMode } from "./components/Signet/Signet.tsx";
 import { Spring } from "./components/Signet/spring.ts";
 import styles from "./App.module.css";
@@ -33,7 +42,7 @@ type Outcome = (typeof OUTCOMES)[number]["value"];
 
 const THUMB_SPRING = { stiffness: 380, damping: 34 };
 
-function useThumbSpring(index: number) {
+function useThumbSpring(index: number, snapRef: RefObject<boolean>) {
   const thumbRef = useRef<HTMLSpanElement>(null);
   const springRef = useRef<Spring | null>(null);
   if (springRef.current === null) {
@@ -45,7 +54,11 @@ function useThumbSpring(index: number) {
     const thumb = thumbRef.current;
     if (!thumb) return;
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    // Keyboard motion and reduced-motion both snap. Pointer-driven changes stretch.
+    const snap = snapRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    snapRef.current = false;
+
+    if (snap) {
       spring.snap(index);
       thumb.style.transform = `translate3d(${index * 100}%, 0, 0)`;
       return;
@@ -66,7 +79,7 @@ function useThumbSpring(index: number) {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [index]);
+  }, [index, snapRef]);
 
   return thumbRef;
 }
@@ -85,10 +98,21 @@ function Segmented<T extends string>({
   onChange: (value: T) => void;
 }) {
   const selectedIndex = options.findIndex((option) => option.value === value);
-  const thumbRef = useThumbSpring(selectedIndex);
+  const snapRef = useRef(false);
+  const thumbRef = useThumbSpring(selectedIndex, snapRef);
+
+  const onThumbKeyDown = (event: KeyboardEvent<HTMLFieldSetElement>) => {
+    switch (event.key) {
+      case "ArrowLeft":
+      case "ArrowRight":
+      case "ArrowUp":
+      case "ArrowDown":
+        snapRef.current = true;
+    }
+  };
 
   return (
-    <fieldset className={styles.modes}>
+    <fieldset className={styles.modes} onKeyDown={onThumbKeyDown}>
       <legend className={styles.modesLegend}>{legend}</legend>
       <div
         className={styles.switcher}
@@ -118,6 +142,9 @@ function App() {
   const [outcome, setOutcome] = useState<Outcome>("ok");
   const [resetKey, setResetKey] = useState(0);
   const [paid, setPaid] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const payRef = useRef<HTMLButtonElement>(null);
+  const resetRef = useRef<HTMLButtonElement>(null);
   const outcomeRef = useRef(outcome);
   outcomeRef.current = outcome;
 
@@ -135,6 +162,15 @@ function App() {
       }, PAY_DELAY_MS);
     });
   }, []);
+
+  useLayoutEffect(() => {
+    if (paid) resetRef.current?.focus();
+  }, [paid]);
+
+  useLayoutEffect(() => {
+    if (resetKey === 0) return;
+    payRef.current?.focus();
+  }, [resetKey]);
 
   return (
     <main className={styles.page}>
@@ -171,7 +207,14 @@ function App() {
           <span>Mastercard ···· 4242</span>
           <span className={styles.paymentSaved}>Saved</span>
         </div>
-        <Signet key={resetKey} amount={formatUSD(TOTAL)} mode={mode} onPay={onPay} />
+        <Signet
+          key={resetKey}
+          ref={payRef}
+          amount={formatUSD(TOTAL)}
+          mode={mode}
+          onPay={onPay}
+          onBusyChange={setBusy}
+        />
       </section>
 
       <div className={styles.controls}>
@@ -192,12 +235,14 @@ function App() {
           />
         </div>
         <button
+          ref={resetRef}
           type="button"
           className={styles.reset}
-          disabled={!paid}
+          disabled={!busy}
           onClick={() => {
             setResetKey((key) => key + 1);
             setPaid(false);
+            setBusy(false);
           }}
         >
           Reset demo

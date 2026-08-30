@@ -5,6 +5,7 @@ import {
   useState,
   type KeyboardEvent,
   type PointerEvent,
+  type Ref,
 } from "react";
 import { Spring, type SpringConfig } from "./spring.ts";
 import styles from "./Signet.module.css";
@@ -63,6 +64,9 @@ interface SignetProps {
   /** Runs after confirmation. Resolve to pay, reject to fail and offer retry. */
   onPay: () => Promise<void>;
   undoWindowMs?: number;
+  /** True while the control is away from idle, so the demo can offer Reset. */
+  onBusyChange?: (busy: boolean) => void;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 interface AnimState {
@@ -86,6 +90,8 @@ function Signet({
   mode: modeOverride,
   onPay,
   undoWindowMs = DEFAULT_UNDO_WINDOW_MS,
+  onBusyChange,
+  ref,
 }: SignetProps) {
   const mode = usePointerMode(modeOverride);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -93,6 +99,14 @@ function Signet({
   const [flash, setFlash] = useState(false);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const setButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      buttonRef.current = node;
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
   const fillRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<SVGCircleElement>(null);
   const onPayRef = useRef(onPay);
@@ -309,6 +323,10 @@ function Signet({
     };
   }, []);
 
+  useEffect(() => {
+    onBusyChange?.(phase !== "idle");
+  }, [phase, onBusyChange]);
+
   const startHold = useCallback(() => {
     const a = anim.current!;
     if (a.filling || (phase !== "idle" && phase !== "draining")) return;
@@ -422,6 +440,10 @@ function Signet({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (locked && (event.key === " " || event.key === "Enter")) {
+      event.preventDefault();
+      return;
+    }
     if (phase === "failed" && (event.key === " " || event.key === "Enter")) {
       event.preventDefault();
       if (!event.repeat) retry();
@@ -483,7 +505,7 @@ function Signet({
   return (
     <div className={styles.signet}>
       <button
-        ref={buttonRef}
+        ref={setButtonRef}
         type="button"
         className={[
           styles.button,
@@ -492,7 +514,8 @@ function Signet({
           phase === "failed" ? styles.failed : "",
           flash ? styles.flash : "",
         ].join(" ")}
-        disabled={phase === "paid"}
+        // Native disabled drops the focused control from the tab order.
+        aria-disabled={phase === "paid" || undefined}
         aria-busy={phase === "processing" || undefined}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
