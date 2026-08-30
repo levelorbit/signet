@@ -2,7 +2,10 @@
   max-width: 26rem;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: var(--space-xl) var(--space-md);
+  padding-top: max(var(--space-xl), env(safe-area-inset-top));
+  padding-bottom: max(var(--space-xl), env(safe-area-inset-bottom));
+  padding-left: max(var(--space-md), env(safe-area-inset-left));
+  padding-right: max(var(--space-md), env(safe-area-inset-right));
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -30,6 +33,9 @@
   font-size: 0.9rem;
   color: var(--color-muted);
   text-decoration: none;
+  text-decoration-thickness: from-font;
+  text-underline-position: from-font;
+  text-decoration-skip-ink: auto;
   transition: color 150ms var(--ease-out);
   touch-action: manipulation;
 }
@@ -53,23 +59,32 @@
   }
 }
 
+.githubLink:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 3px;
+}
+
 .githubIcon {
   width: 1.125rem;
   height: 1.125rem;
   fill: currentColor;
+  pointer-events: none;
 }
 
 .title {
   margin: 0;
   font-size: 2rem;
+  font-weight: var(--font-weight-bold);
   letter-spacing: -0.02em;
   line-height: 1.1;
+  text-wrap: balance;
 }
 
 .tagline {
   margin: 0;
   color: var(--color-muted);
   line-height: 1.5;
+  text-wrap: pretty;
 }
 
 .card {
@@ -80,9 +95,8 @@
   /* Hint sits in this padding, so the bottom needs more than the sides. */
   padding-bottom: var(--space-xl);
   background: var(--color-bg);
-  border: 1px solid var(--color-border);
   border-radius: 16px;
-  box-shadow: 0 8px 24px oklch(0 0 0 / 0.06);
+  box-shadow: var(--elevation-raised);
 }
 
 .lines {
@@ -109,8 +123,8 @@
   align-items: baseline;
   gap: var(--space-md);
   padding-top: var(--space-sm);
-  border-top: 1px solid var(--color-border);
-  font-weight: 600;
+  border-top: var(--border-hairline) solid var(--color-border);
+  font-weight: var(--font-weight-semibold);
 }
 
 .totalPrice {
@@ -122,6 +136,12 @@
   align-items: center;
   gap: var(--space-sm);
   font-size: 0.9rem;
+}
+
+.cardIcon {
+  flex: none;
+  pointer-events: none;
+  user-select: none;
 }
 
 .cardIcon rect {
@@ -141,8 +161,9 @@
   margin-left: auto;
   padding: 2px var(--space-sm);
   font-size: 0.75rem;
+  letter-spacing: 0.02em;
   color: var(--color-muted);
-  border: 1px solid var(--color-border);
+  border: var(--border-hairline) solid var(--color-border);
   border-radius: 999px;
 }
 
@@ -169,6 +190,7 @@
   padding: 0;
   margin-bottom: var(--space-xs);
   font-size: 0.8rem;
+  letter-spacing: 0.01em;
   color: var(--color-muted);
 }
 
@@ -229,10 +251,11 @@
   min-height: 44px;
   padding: 0.25rem 0.75rem;
   font-size: 0.8rem;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.01em;
   color: var(--color-muted);
   border-radius: 7px;
-  transition: color 180ms var(--ease-out);
+  transition: color 150ms var(--ease-out);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -251,6 +274,8 @@
 }
 
 .reset {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -266,20 +291,34 @@
   cursor: pointer;
   touch-action: manipulation;
   transition:
-    background-color 150ms var(--ease-out),
     opacity 150ms var(--ease-out),
     scale 150ms var(--ease-out);
 }
 
+.reset::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: oklch(0 0 0);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms var(--ease-out);
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .reset:hover:not(:disabled) {
-    background: var(--color-fill);
+  .reset:hover:not(:disabled)::before {
+    opacity: 0.04;
   }
 }
 
 .reset:active:not(:disabled) {
-  background: var(--color-border);
   scale: 0.96;
+}
+
+.reset:active:not(:disabled)::before {
+  opacity: 0.1;
 }
 
 .reset:disabled {
@@ -287,9 +326,15 @@
   cursor: default;
 }
 
+.reset:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .modeLabel,
   .reset,
+  .reset::before,
   .githubLink {
     transition: none;
   }

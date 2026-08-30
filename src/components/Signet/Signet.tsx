@@ -567,6 +567,7 @@ function Signet({
           flash ? styles.flash : "",
         ].join(" ")}
         // Native disabled drops the focused control from the tab order.
+        aria-label={label}
         aria-disabled={phase === "paid" || undefined}
         aria-busy={phase === "processing" || undefined}
         onPointerDown={onPointerDown}
@@ -581,7 +582,7 @@ function Signet({
         <div ref={fillRef} className={styles.fill} aria-hidden="true" />
         <div className={styles.sheen} aria-hidden="true" />
         <div className={styles.glint} aria-hidden="true" onAnimationEnd={() => setFlash(false)} />
-        <span className={styles.label}>
+        <span className={styles.label} aria-hidden="true">
           <span
             key={`in-${swap.ghostKey}`}
             className={styles.face}

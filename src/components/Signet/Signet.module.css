@@ -6,16 +6,16 @@
 }
 
 .button {
-  --overlay: 0;
   position: relative;
   isolation: isolate;
   overflow: hidden;
   border: none;
   border-radius: 12px;
+  min-height: 44px;
   padding: var(--space-md) var(--space-lg);
   font: inherit;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
   color: var(--color-on-ink);
   background: var(--color-ink);
@@ -25,28 +25,39 @@
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
   will-change: transform;
-  transition:
-    background-color 200ms var(--ease-out),
-    --overlay 150ms var(--ease-out);
+}
+
+/* Paid/fail colour sits on its own layer so the change is opacity, not paint. */
+.button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--color-paid);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease-out);
 }
 
 .button::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 2;
-  background: oklch(1 0 0 / var(--overlay));
+  z-index: 3;
+  background: oklch(1 0 0);
+  opacity: 0;
   pointer-events: none;
+  transition: opacity 150ms var(--ease-out);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .button:hover:not(:disabled):not([aria-disabled="true"]):not(.processing) {
-    --overlay: var(--overlay-hover);
+  .button:hover:not(:disabled):not([aria-disabled="true"]):not(.processing)::after {
+    opacity: var(--overlay-hover);
   }
 }
 
-.button:active:not(:disabled):not([aria-disabled="true"]):not(.processing):not(.paid) {
-  --overlay: var(--overlay-press);
+.button:active:not(:disabled):not([aria-disabled="true"]):not(.processing):not(.paid)::after {
+  opacity: var(--overlay-press);
 }
 
 .button:focus-visible {
@@ -63,29 +74,31 @@
   cursor: default;
 }
 
-.button.paid {
-  background: var(--color-paid);
+.button.paid::before {
+  opacity: 1;
 }
 
-.button.failed {
+.button.failed::before {
   background: var(--color-fail);
+  opacity: 1;
 }
 
 .fill {
   position: absolute;
   inset: 0;
-  z-index: 0;
-  background: var(--overlay-progress);
+  z-index: 1;
+  background: oklch(1 0 0);
+  opacity: var(--overlay-progress);
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
   pointer-events: none;
-  transition: background-color 200ms var(--ease-out);
+  transition: opacity 200ms var(--ease-out);
 }
 
 .paid .fill,
 .failed .fill {
-  background: var(--overlay-progress-end);
+  opacity: var(--overlay-progress-end);
 }
 
 /*
@@ -96,7 +109,7 @@
 .sheen {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
   opacity: 0;
   background: linear-gradient(
@@ -123,7 +136,7 @@
 .glint {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
   background: oklch(1 0 0);
   opacity: 0;
@@ -135,12 +148,14 @@
 
 .label {
   position: relative;
-  z-index: 3;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: center;
   /* Taller than the 18px icons, so their appearance can't change the button height. */
   line-height: 1.25rem;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .label svg {
@@ -155,7 +170,9 @@
 }
 
 .face[data-swap] {
-  animation: face-in 200ms var(--ease-out);
+  /* both: first paint is the from-keyframe, so the new label doesn't
+     flash at full opacity on top of the outgoing one. */
+  animation: face-in 200ms var(--ease-out) both;
 }
 
 .faceLeave {
@@ -164,13 +181,19 @@
   display: flex;
   width: 100%;
   pointer-events: none;
-  animation: face-out 150ms var(--ease-out);
+  /* forwards: hold the last frame so the old label can't snap back
+     before onAnimationEnd unmounts it. */
+  animation: face-out 150ms var(--ease-out) forwards;
 }
 
 @keyframes face-in {
   from {
     opacity: 0;
     transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -208,6 +231,8 @@
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
+  /* The stroke is left-heavy in the viewBox; shift toward the open side. */
+  margin-inline-start: 1px;
 }
 
 @keyframes flash {
@@ -229,7 +254,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .button,
+  .button::before,
+  .button::after,
   .fill,
   .sheen,
   .hint {
