@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from "react";
-import Signet, { type SignetMode } from "./components/Signet/Signet.tsx";
+import Signet, { type SignetMode, type SignetStatus } from "./components/Signet/Signet.tsx";
 import { Spring } from "./components/Signet/spring.ts";
 import styles from "./App.module.css";
 
@@ -142,7 +142,7 @@ function App() {
   const [outcome, setOutcome] = useState<Outcome>("ok");
   const [resetKey, setResetKey] = useState(0);
   const [paid, setPaid] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<SignetStatus>("idle");
   const payRef = useRef<HTMLButtonElement>(null);
   const resetRef = useRef<HTMLButtonElement>(null);
   const outcomeRef = useRef(outcome);
@@ -213,7 +213,7 @@ function App() {
           amount={formatUSD(TOTAL)}
           mode={mode}
           onPay={onPay}
-          onBusyChange={setBusy}
+          onStatusChange={setStatus}
         />
       </section>
 
@@ -238,11 +238,11 @@ function App() {
           ref={resetRef}
           type="button"
           className={styles.reset}
-          disabled={!busy}
+          disabled={status === "idle"}
           onClick={() => {
             setResetKey((key) => key + 1);
             setPaid(false);
-            setBusy(false);
+            setStatus("idle");
           }}
         >
           Reset demo

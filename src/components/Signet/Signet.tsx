@@ -3,7 +3,9 @@ import {
   useEffect,
   useRef,
   useState,
+  type ComponentProps,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent,
   type Ref,
 } from "react";
@@ -11,9 +13,25 @@ import { Spring, type SpringConfig } from "./spring.ts";
 import styles from "./Signet.module.css";
 
 export type SignetMode = "hold" | "undo";
+export type SignetStatus = "idle" | "confirming" | "processing" | "paid" | "failed";
 
 type Phase = "idle" | "holding" | "draining" | "undoing" | "processing" | "paid" | "failed";
 type Icon = "ring" | "check" | "none";
+
+function toStatus(phase: Phase): SignetStatus {
+  switch (phase) {
+    case "holding":
+    case "draining":
+    case "undoing":
+      return "confirming";
+    case "processing":
+    case "paid":
+    case "failed":
+      return phase;
+    default:
+      return "idle";
+  }
+}
 
 const FILL_DURATION_MS = 1100;
 const FINISH_DURATION_MS = 200;
@@ -93,16 +111,15 @@ function Glyph({
   return null;
 }
 
-interface SignetProps {
+/** Label is phase-driven, and type is always "button" so a form cannot submit from a half-confirmed hold. */
+export type SignetProps = {
   amount: string;
   mode?: SignetMode;
   /** Runs after confirmation. Resolve to pay, reject to fail and offer retry. */
   onPay: () => Promise<void>;
   undoWindowMs?: number;
-  /** True while the control is away from idle, so the demo can offer Reset. */
-  onBusyChange?: (busy: boolean) => void;
-  ref?: Ref<HTMLButtonElement>;
-}
+  onStatusChange?: (status: SignetStatus) => void;
+} & Omit<ComponentProps<"button">, "children" | "type">;
 
 interface AnimState {
   raf: number;
@@ -125,8 +142,19 @@ function Signet({
   mode: modeOverride,
   onPay,
   undoWindowMs = DEFAULT_UNDO_WINDOW_MS,
-  onBusyChange,
+  onStatusChange,
+  disabled,
+  className,
   ref,
+  onPointerDown: onPointerDownProp,
+  onPointerUp: onPointerUpProp,
+  onPointerCancel: onPointerCancelProp,
+  onLostPointerCapture: onLostPointerCaptureProp,
+  onClick: onClickProp,
+  onKeyDown: onKeyDownProp,
+  onKeyUp: onKeyUpProp,
+  onContextMenu: onContextMenuProp,
+  ...props
 }: SignetProps) {
   const mode = usePointerMode(modeOverride);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -359,8 +387,8 @@ function Signet({
   }, []);
 
   useEffect(() => {
-    onBusyChange?.(phase !== "idle");
-  }, [phase, onBusyChange]);
+    onStatusChange?.(toStatus(phase));
+  }, [phase, onStatusChange]);
 
   const startHold = useCallback(() => {
     const a = anim.current!;
@@ -444,10 +472,11 @@ function Signet({
     ensureRunning();
   }, [mode, ensureRunning]);
 
-  const locked = phase === "processing" || phase === "paid";
+  const locked = Boolean(disabled) || phase === "processing" || phase === "paid";
 
   const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    if (locked || event.button !== 0) return;
+    onPointerDownProp?.(event);
+    if (event.defaultPrevented || locked || event.button !== 0) return;
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {
@@ -461,7 +490,7 @@ function Signet({
     if (mode === "hold") startHold();
   };
 
-  const onPointerUp = () => {
+  const endPress = () => {
     const a = anim.current!;
     a.scale.config = PRESS_SPRING;
     a.scale.target = 1;
@@ -469,8 +498,24 @@ function Signet({
     if (mode === "hold") releaseHold();
   };
 
-  const onClick = () => {
-    if (locked) return;
+  const onPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    onPointerUpProp?.(event);
+    endPress();
+  };
+
+  const onPointerCancel = (event: PointerEvent<HTMLButtonElement>) => {
+    onPointerCancelProp?.(event);
+    endPress();
+  };
+
+  const onLostPointerCapture = (event: PointerEvent<HTMLButtonElement>) => {
+    onLostPointerCaptureProp?.(event);
+    endPress();
+  };
+
+  const onClick = (event: MouseEvent<HTMLButtonElement>) => {
+    onClickProp?.(event);
+    if (event.defaultPrevented || locked) return;
     if (phase === "failed") {
       retry();
       return;
@@ -484,6 +529,8 @@ function Signet({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    onKeyDownProp?.(event);
+    if (event.defaultPrevented) return;
     if (locked && (event.key === " " || event.key === "Enter")) {
       event.preventDefault();
       return;
@@ -506,10 +553,17 @@ function Signet({
   };
 
   const onKeyUp = (event: KeyboardEvent<HTMLButtonElement>) => {
+    onKeyUpProp?.(event);
+    if (event.defaultPrevented) return;
     if (mode === "hold" && event.key === " ") {
       event.preventDefault();
       releaseHold();
     }
+  };
+
+  const onContextMenu = (event: MouseEvent<HTMLButtonElement>) => {
+    onContextMenuProp?.(event);
+    event.preventDefault();
   };
 
   const label = (() => {
@@ -557,6 +611,7 @@ function Signet({
   return (
     <div className={styles.signet}>
       <button
+        {...props}
         ref={setButtonRef}
         type="button"
         className={[
@@ -565,19 +620,20 @@ function Signet({
           phase === "processing" ? styles.processing : "",
           phase === "failed" ? styles.failed : "",
           flash ? styles.flash : "",
+          className ?? "",
         ].join(" ")}
         // Native disabled drops the focused control from the tab order.
         aria-label={label}
-        aria-disabled={phase === "paid" || undefined}
+        aria-disabled={disabled || phase === "paid" || undefined}
         aria-busy={phase === "processing" || undefined}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onLostPointerCapture={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onLostPointerCapture={onLostPointerCapture}
         onClick={onClick}
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}
-        onContextMenu={(event) => event.preventDefault()}
+        onContextMenu={onContextMenu}
       >
         <div ref={fillRef} className={styles.fill} aria-hidden="true" />
         <div className={styles.sheen} aria-hidden="true" />
@@ -618,4 +674,5 @@ function Signet({
   );
 }
 
+export { Signet };
 export default Signet;
