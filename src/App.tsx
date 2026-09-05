@@ -249,6 +249,38 @@ function App() {
         </button>
       </div>
 
+      <article className={styles.writeup} aria-labelledby="about-heading">
+        <section>
+          <h2 id="about-heading">How it started</h2>
+          <p>
+            I found a website with a messy payment flow. It had several payment providers and the
+            process happened directly on the item page. The payment flow, before you even decided
+            to pay, occupied nearly half of the page. It inspired me to prototype my own version.
+            Before prototyping, I also researched how some companies handle paying. Apple and
+            Amazon stood out to me.
+          </p>
+          <p>
+            Apple's Face ID payment flow on mobile inspired me to try hold-to-confirm. I wanted
+            to preserve that intentional moment through a gesture I could use across devices.
+          </p>
+          <p>
+            From Amazon, I took the speed of paying once your details are saved. The flow I tried
+            also had a button and confirmation, but for my experiment I replaced that confirmation
+            with a chance to cancel after clicking Pay.
+          </p>
+        </section>
+
+        <section>
+          <h2>Hold or undo</h2>
+          <p>
+            On mobile, hold feels deliberate. When I tried it on desktop, it added unnecessary
+            friction and wasn't as pleasant as holding the button using a finger. That's why I
+            decided to flip the order. After clicking Pay, the user can cancel before the payment
+            is sent. This helps preserve the intention to pay. I was satisfied with the result.
+          </p>
+        </section>
+      </article>
+
       <div className={styles.footer}>
         <a
           className={styles.githubLink}
