@@ -9,7 +9,27 @@ import {
   type PointerEvent,
   type Ref,
 } from "react";
-import { Spring, type SpringConfig } from "./spring.ts";
+import { Spring } from "./spring.ts";
+import {
+  FILL_DURATION_MS,
+  FINISH_DURATION_MS,
+  PROCESSING_FILL_MS,
+  FAIL_DRAIN_MS,
+  RELEASE_MS,
+  SLIP_FORGIVENESS,
+  QUICK_TAP_MS,
+  DEFAULT_UNDO_WINDOW_MS,
+  HOLD_SCALE,
+  SHAKE_DURATION_MS,
+  SHAKE_CYCLES,
+  SHAKE_AMPLITUDE,
+  SHAKE_DECAY,
+  PRESS_SPRING,
+  SETTLE_SPRING,
+  SETTLE_KICK_VELOCITY,
+  RING_RADIUS,
+  RING_CIRCUMFERENCE,
+} from "./constants.ts";
 import styles from "./Signet.module.css";
 
 export type SignetMode = "hold" | "undo";
@@ -32,30 +52,6 @@ function toStatus(phase: Phase): SignetStatus {
       return "idle";
   }
 }
-
-const FILL_DURATION_MS = 1100;
-const FINISH_DURATION_MS = 200;
-const PROCESSING_FILL_MS = 200;
-const FAIL_DRAIN_MS = 200;
-// Letting go is the system responding: snappy, not a reverse of the 1.1s hold.
-const RELEASE_MS = 200;
-// A release this close to the end is intent with a slipped finger, so it counts.
-const SLIP_FORGIVENESS = 0.92;
-const QUICK_TAP_MS = 200;
-const DEFAULT_UNDO_WINDOW_MS = 3500;
-const HOLD_SCALE = 0.96;
-
-const SHAKE_DURATION_MS = 280;
-const SHAKE_CYCLES = 7;
-const SHAKE_AMPLITUDE = 7;
-const SHAKE_DECAY = 4.2;
-
-const PRESS_SPRING: SpringConfig = { stiffness: 420, damping: 34 };
-const SETTLE_SPRING: SpringConfig = { stiffness: 300, damping: 26 };
-const SETTLE_KICK_VELOCITY = 1.5;
-
-const RING_RADIUS = 8;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 function easeOut(t: number): number {
   return 1 - (1 - t) * (1 - t);
@@ -117,7 +113,12 @@ export type SignetProps = {
   mode?: SignetMode;
   /** Runs after confirmation. Resolve to pay, reject to fail and offer retry. */
   onPay: () => Promise<void>;
+  /** Undo window in milliseconds. Invalid values use 3500 ms. */
   undoWindowMs?: number;
+  /** Hold duration in milliseconds. Invalid values use 1100 ms. */
+  holdDuration?: number;
+  /** Release threshold in (0, 1]. Invalid values use 0.92. */
+  slipForgiveness?: number;
   onStatusChange?: (status: SignetStatus) => void;
 } & Omit<ComponentProps<"button">, "children" | "type">;
 
@@ -142,6 +143,8 @@ function Signet({
   mode: modeOverride,
   onPay,
   undoWindowMs = DEFAULT_UNDO_WINDOW_MS,
+  holdDuration = FILL_DURATION_MS,
+  slipForgiveness = SLIP_FORGIVENESS,
   onStatusChange,
   disabled,
   className,
@@ -174,8 +177,17 @@ function Signet({
   const ringRef = useRef<SVGCircleElement>(null);
   const onPayRef = useRef(onPay);
   onPayRef.current = onPay;
-  const undoWindowMsRef = useRef(undoWindowMs);
-  undoWindowMsRef.current = undoWindowMs;
+  const configRef = useRef({ holdDuration, undoWindowMs, slipForgiveness });
+  configRef.current = {
+    holdDuration:
+      Number.isFinite(holdDuration) && holdDuration > 0 ? holdDuration : FILL_DURATION_MS,
+    undoWindowMs:
+      Number.isFinite(undoWindowMs) && undoWindowMs > 0 ? undoWindowMs : DEFAULT_UNDO_WINDOW_MS,
+    slipForgiveness:
+      Number.isFinite(slipForgiveness) && slipForgiveness > 0 && slipForgiveness <= 1
+        ? slipForgiveness
+        : SLIP_FORGIVENESS,
+  };
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const payIdRef = useRef(0);
@@ -294,7 +306,7 @@ function Signet({
 
       if (a.filling) {
         // Linear: this fill is a progress indicator, not a decorative ease.
-        a.progress = Math.min(1, a.progress + dt / FILL_DURATION_MS);
+        a.progress = Math.min(1, a.progress + dt / configRef.current.holdDuration);
         if (a.progress >= 1) {
           startProcessing(now);
         } else {
@@ -315,7 +327,7 @@ function Signet({
 
       if (a.undoStart > 0) {
         const elapsed = now - a.undoStart;
-        const windowMs = undoWindowMsRef.current;
+        const windowMs = configRef.current.undoWindowMs;
         if (elapsed >= windowMs) {
           startProcessing(now);
         } else {
@@ -358,6 +370,7 @@ function Signet({
         fillRef.current.style.transform = `scaleX(${a.progress})`;
       }
       if (buttonRef.current) {
+        buttonRef.current.style.setProperty("--signet-progress", String(a.progress));
         buttonRef.current.style.transform = `translateX(${a.shakeX}px) scale(${a.scale.value})`;
       }
 
@@ -406,7 +419,7 @@ function Signet({
     if (!a.filling) return;
     a.filling = false;
     const now = performance.now();
-    if (a.progress >= SLIP_FORGIVENESS) {
+    if (a.progress >= configRef.current.slipForgiveness) {
       startProcessing(now);
       return;
     }
@@ -609,11 +622,14 @@ function Signet({
   }
 
   return (
-    <div className={styles.signet}>
+    <div className={styles.signet} data-signet="" data-mode={mode}>
       <button
         {...props}
         ref={setButtonRef}
         type="button"
+        data-signet-button=""
+        data-phase={phase}
+        data-mode={mode}
         className={[
           styles.button,
           phase === "paid" ? styles.paid : "",
@@ -635,7 +651,7 @@ function Signet({
         onKeyUp={onKeyUp}
         onContextMenu={onContextMenu}
       >
-        <div ref={fillRef} className={styles.fill} aria-hidden="true" />
+        <div ref={fillRef} data-signet-fill="" className={styles.fill} aria-hidden="true" />
         <div className={styles.sheen} aria-hidden="true" />
         <div className={styles.glint} aria-hidden="true" onAnimationEnd={() => setFlash(false)} />
         <span className={styles.label} aria-hidden="true">
