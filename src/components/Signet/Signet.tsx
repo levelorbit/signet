@@ -3,40 +3,62 @@ import {
   useEffect,
   useRef,
   useState,
+  type ComponentProps,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent,
+  type Ref,
 } from "react";
 import { Spring } from "./spring.ts";
 import {
-  DRAIN_SPEED_FACTOR,
   FILL_DURATION_MS,
-  FILL_END_EASE,
   FINISH_DURATION_MS,
-  HOLD_SCALE,
-  PRESS_SPRING,
-  QUICK_TAP_MS,
-  RING_CIRCUMFERENCE,
-  RING_RADIUS,
-  SETTLE_KICK_VELOCITY,
-  SETTLE_SPRING,
+  PROCESSING_FILL_MS,
+  FAIL_DRAIN_MS,
+  RELEASE_MS,
   SLIP_FORGIVENESS,
-  UNDO_WINDOW_MS,
+  QUICK_TAP_MS,
+  DEFAULT_UNDO_WINDOW_MS,
+  HOLD_SCALE,
+  SHAKE_DURATION_MS,
+  SHAKE_CYCLES,
+  SHAKE_AMPLITUDE,
+  SHAKE_DECAY,
+  PRESS_SPRING,
+  SETTLE_SPRING,
+  SETTLE_KICK_VELOCITY,
+  RING_RADIUS,
+  RING_CIRCUMFERENCE,
 } from "./constants.ts";
 import styles from "./Signet.module.css";
 
 export type SignetMode = "hold" | "undo";
+export type SignetStatus = "idle" | "confirming" | "processing" | "paid" | "failed";
 
-type Phase = "idle" | "holding" | "draining" | "undoing" | "confirmed";
+type Phase = "idle" | "holding" | "draining" | "undoing" | "processing" | "paid" | "failed";
 type Icon = "ring" | "check" | "none";
 
-function easeFill(progress: number): number {
-  return 1 - Math.pow(1 - progress, FILL_END_EASE);
+function toStatus(phase: Phase): SignetStatus {
+  switch (phase) {
+    case "holding":
+    case "draining":
+    case "undoing":
+      return "confirming";
+    case "processing":
+    case "paid":
+    case "failed":
+      return phase;
+    default:
+      return "idle";
+  }
+}
+
+function easeOut(t: number): number {
+  return 1 - (1 - t) * (1 - t);
 }
 
 function usePointerMode(override?: SignetMode): SignetMode {
-  const [coarse, setCoarse] = useState(
-    () => window.matchMedia("(pointer: coarse)").matches,
-  );
+  const [coarse, setCoarse] = useState(() => window.matchMedia("(pointer: coarse)").matches);
   useEffect(() => {
     const query = window.matchMedia("(pointer: coarse)");
     const onChange = (event: MediaQueryListEvent) => setCoarse(event.matches);
@@ -50,41 +72,55 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export interface SignetLabels {
-  /** Resting label in undo mode, where a single press commits. */
-  action: string;
-  /** Resting label in hold mode, which should name the gesture. */
-  hold: string;
-  /** Terminal label once the action is committed. */
-  confirmed: string;
-  /**
-   * Label shown while the undo window is open.
-   * @default "Undo"
-   */
-  undo?: string;
+function Glyph({
+  icon,
+  ringRef,
+  ringOffset = "0",
+}: {
+  icon: Icon;
+  ringRef?: Ref<SVGCircleElement>;
+  ringOffset?: string;
+}) {
+  if (icon === "ring") {
+    return (
+      <svg className={styles.ring} viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+        <circle className={styles.ringTrack} cx="10" cy="10" r={RING_RADIUS} />
+        <circle
+          ref={ringRef}
+          className={styles.ringArc}
+          cx="10"
+          cy="10"
+          r={RING_RADIUS}
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={ringOffset}
+        />
+      </svg>
+    );
+  }
+  if (icon === "check") {
+    return (
+      <svg className={styles.check} viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+        <path d="M4 10.5 8.5 15 16 6" />
+      </svg>
+    );
+  }
+  return null;
 }
 
-interface SignetProps {
-  labels: SignetLabels;
+/** Label is phase-driven, and type is always "button" so a form cannot submit from a half-confirmed hold. */
+export type SignetProps = {
+  amount: string;
   mode?: SignetMode;
-  onConfirm?: () => void;
-  /**
-   * How long the button must be held before the action commits, in ms.
-   * @default 1100
-   */
+  /** Runs after confirmation. Resolve to pay, reject to fail and offer retry. */
+  onPay: () => Promise<void>;
+  /** Undo window in milliseconds. Invalid values use 3500 ms. */
+  undoWindowMs?: number;
+  /** Hold duration in milliseconds. Invalid values use 1100 ms. */
   holdDuration?: number;
-  /**
-   * How long a committed action stays undoable in undo mode, in ms.
-   * @default 5000
-   */
-  undoWindow?: number;
-  /**
-   * Progress between 0 and 1 past which releasing still commits, so a finger
-   * that slips near the end reads as intent rather than a cancel.
-   * @default 0.92
-   */
+  /** Release threshold in (0, 1]. Invalid values use 0.92. */
   slipForgiveness?: number;
-}
+  onStatusChange?: (status: SignetStatus) => void;
+} & Omit<ComponentProps<"button">, "children" | "type">;
 
 interface AnimState {
   raf: number;
@@ -96,16 +132,32 @@ interface AnimState {
   undoStart: number;
   finishStart: number;
   finishFrom: number;
+  finishDuration: number;
+  shakeRemain: number;
+  shakeX: number;
   scale: Spring;
 }
 
 function Signet({
-  labels,
+  amount,
   mode: modeOverride,
-  onConfirm,
+  onPay,
+  undoWindowMs = DEFAULT_UNDO_WINDOW_MS,
   holdDuration = FILL_DURATION_MS,
-  undoWindow = UNDO_WINDOW_MS,
   slipForgiveness = SLIP_FORGIVENESS,
+  onStatusChange,
+  disabled,
+  className,
+  ref,
+  onPointerDown: onPointerDownProp,
+  onPointerUp: onPointerUpProp,
+  onPointerCancel: onPointerCancelProp,
+  onLostPointerCapture: onLostPointerCaptureProp,
+  onClick: onClickProp,
+  onKeyDown: onKeyDownProp,
+  onKeyUp: onKeyUpProp,
+  onContextMenu: onContextMenuProp,
+  ...props
 }: SignetProps) {
   const mode = usePointerMode(modeOverride);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -113,14 +165,32 @@ function Signet({
   const [flash, setFlash] = useState(false);
 
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const setButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      buttonRef.current = node;
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
   const fillRef = useRef<HTMLDivElement>(null);
   const ringRef = useRef<SVGCircleElement>(null);
-  const onConfirmRef = useRef(onConfirm);
-  onConfirmRef.current = onConfirm;
-  const configRef = useRef({ holdDuration, undoWindow, slipForgiveness });
-  configRef.current = { holdDuration, undoWindow, slipForgiveness };
+  const onPayRef = useRef(onPay);
+  onPayRef.current = onPay;
+  const configRef = useRef({ holdDuration, undoWindowMs, slipForgiveness });
+  configRef.current = {
+    holdDuration:
+      Number.isFinite(holdDuration) && holdDuration > 0 ? holdDuration : FILL_DURATION_MS,
+    undoWindowMs:
+      Number.isFinite(undoWindowMs) && undoWindowMs > 0 ? undoWindowMs : DEFAULT_UNDO_WINDOW_MS,
+    slipForgiveness:
+      Number.isFinite(slipForgiveness) && slipForgiveness > 0 && slipForgiveness <= 1
+        ? slipForgiveness
+        : SLIP_FORGIVENESS,
+  };
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  const payIdRef = useRef(0);
 
   const anim = useRef<AnimState>(null);
   if (anim.current === null) {
@@ -134,64 +204,137 @@ function Signet({
       undoStart: 0,
       finishStart: 0,
       finishFrom: 0,
+      finishDuration: FINISH_DURATION_MS,
+      shakeRemain: 0,
+      shakeX: 0,
       scale: new Spring(1, PRESS_SPRING),
     };
   }
 
-  const commitConfirm = useCallback((now: number) => {
+  const ensureRunningRef = useRef<() => void>(() => {});
+
+  const succeed = useCallback((now: number) => {
     const a = anim.current!;
     a.filling = false;
     a.draining = false;
     a.undoStart = 0;
+    a.shakeRemain = 0;
+    a.shakeX = 0;
     if (a.progress > 0 && a.progress < 1) {
       a.finishFrom = a.progress;
       a.finishStart = now;
+      a.finishDuration = FINISH_DURATION_MS;
+    } else {
+      a.progress = 1;
     }
     a.scale.config = PRESS_SPRING;
     a.scale.target = 1;
-    setPhase("confirmed");
+    phaseRef.current = "paid";
+    setPhase("paid");
     setShowHint(false);
     setFlash(true);
     navigator.vibrate?.(30);
-    onConfirmRef.current?.();
+    ensureRunningRef.current();
   }, []);
+
+  const fail = useCallback(() => {
+    const a = anim.current!;
+    a.filling = false;
+    a.draining = false;
+    a.undoStart = 0;
+    a.finishStart = 0;
+    a.scale.config = PRESS_SPRING;
+    a.scale.target = 1;
+    if (!prefersReducedMotion()) {
+      a.shakeRemain = SHAKE_DURATION_MS;
+      a.shakeX = 0;
+    }
+    phaseRef.current = "failed";
+    setPhase("failed");
+    setShowHint(false);
+    setFlash(false);
+    ensureRunningRef.current();
+  }, []);
+
+  const startProcessing = useCallback(
+    (now: number) => {
+      const current = phaseRef.current;
+      if (current === "processing" || current === "paid") return;
+
+      const a = anim.current!;
+      a.filling = false;
+      a.draining = false;
+      a.undoStart = 0;
+      a.shakeRemain = 0;
+      a.shakeX = 0;
+      if (a.progress < 1) {
+        a.finishFrom = a.progress;
+        a.finishStart = now;
+        a.finishDuration = PROCESSING_FILL_MS;
+      }
+      a.scale.config = PRESS_SPRING;
+      a.scale.target = 1;
+      phaseRef.current = "processing";
+      setPhase("processing");
+      setShowHint(false);
+      setFlash(false);
+
+      const id = ++payIdRef.current;
+      void Promise.resolve()
+        .then(() => onPayRef.current())
+        .then(
+          () => {
+            if (payIdRef.current !== id) return;
+            succeed(performance.now());
+          },
+          () => {
+            if (payIdRef.current !== id) return;
+            fail();
+          },
+        );
+      ensureRunningRef.current();
+    },
+    [fail, succeed],
+  );
 
   const tick = useCallback(
     (now: number) => {
       const a = anim.current!;
-      const config = configRef.current;
       const dt = now - a.last;
       a.last = now;
       let active = false;
 
       if (a.filling) {
-        a.progress = Math.min(1, a.progress + dt / config.holdDuration);
+        // Linear: this fill is a progress indicator, not a decorative ease.
+        a.progress = Math.min(1, a.progress + dt / configRef.current.holdDuration);
         if (a.progress >= 1) {
-          commitConfirm(now);
+          startProcessing(now);
         } else {
           active = true;
         }
       } else if (a.draining) {
-        a.progress = Math.max(
-          0,
-          a.progress - (dt / config.holdDuration) * DRAIN_SPEED_FACTOR,
-        );
+        a.progress = Math.max(0, a.progress - dt / RELEASE_MS);
         if (a.progress <= 0) {
           a.draining = false;
           setPhase("idle");
         } else {
           active = true;
         }
+      } else if (phaseRef.current === "failed" && a.finishStart === 0 && a.progress > 0) {
+        a.progress = Math.max(0, a.progress - dt / FAIL_DRAIN_MS);
+        if (a.progress > 0) active = true;
       }
 
       if (a.undoStart > 0) {
         const elapsed = now - a.undoStart;
-        if (elapsed >= config.undoWindow) {
-          commitConfirm(now);
+        const windowMs = configRef.current.undoWindowMs;
+        if (elapsed >= windowMs) {
+          startProcessing(now);
         } else {
+          a.progress = Math.max(0, 1 - elapsed / windowMs);
           if (ringRef.current) {
             ringRef.current.style.strokeDashoffset = String(
-              RING_CIRCUMFERENCE * (elapsed / config.undoWindow),
+              RING_CIRCUMFERENCE * (elapsed / windowMs),
             );
           }
           active = true;
@@ -200,12 +343,12 @@ function Signet({
 
       if (a.finishStart > 0) {
         const elapsed = now - a.finishStart;
-        if (elapsed >= FINISH_DURATION_MS) {
+        if (elapsed >= a.finishDuration) {
           a.progress = 1;
           a.finishStart = 0;
         } else {
-          a.progress =
-            a.finishFrom + (1 - a.finishFrom) * (elapsed / FINISH_DURATION_MS);
+          const t = easeOut(elapsed / a.finishDuration);
+          a.progress = a.finishFrom + (1 - a.finishFrom) * t;
           active = true;
         }
       }
@@ -214,21 +357,26 @@ function Signet({
         active = true;
       }
 
-      const eased = easeFill(a.progress);
+      if (a.shakeRemain > 0) {
+        a.shakeRemain = Math.max(0, a.shakeRemain - dt);
+        const t = 1 - a.shakeRemain / SHAKE_DURATION_MS;
+        a.shakeX =
+          Math.sin(t * Math.PI * SHAKE_CYCLES) * SHAKE_AMPLITUDE * Math.exp(-t * SHAKE_DECAY);
+        if (a.shakeRemain === 0) a.shakeX = 0;
+        active = true;
+      }
+
       if (fillRef.current) {
-        fillRef.current.style.transform = `scaleX(${eased})`;
+        fillRef.current.style.transform = `scaleX(${a.progress})`;
       }
       if (buttonRef.current) {
-        buttonRef.current.style.transform = `scale(${a.scale.value})`;
-        // Published for consumers building their own fill. Kept on the button
-        // rather than the wrapper: a variable recalculates every descendant,
-        // and the button has the fewest.
-        buttonRef.current.style.setProperty("--signet-progress", String(eased));
+        buttonRef.current.style.setProperty("--signet-progress", String(a.progress));
+        buttonRef.current.style.transform = `translateX(${a.shakeX}px) scale(${a.scale.value})`;
       }
 
       a.raf = active ? requestAnimationFrame(tick) : 0;
     },
-    [commitConfirm],
+    [startProcessing],
   );
 
   const ensureRunning = useCallback(() => {
@@ -238,9 +386,11 @@ function Signet({
       a.raf = requestAnimationFrame(tick);
     }
   }, [tick]);
+  ensureRunningRef.current = ensureRunning;
 
   useEffect(() => {
     return () => {
+      payIdRef.current += 1;
       const a = anim.current!;
       if (a.raf !== 0) {
         cancelAnimationFrame(a.raf);
@@ -249,14 +399,16 @@ function Signet({
     };
   }, []);
 
+  useEffect(() => {
+    onStatusChange?.(toStatus(phase));
+  }, [phase, onStatusChange]);
+
   const startHold = useCallback(() => {
     const a = anim.current!;
     if (a.filling || (phase !== "idle" && phase !== "draining")) return;
     a.filling = true;
     a.draining = false;
     a.holdStart = performance.now();
-    a.scale.config = PRESS_SPRING;
-    a.scale.target = prefersReducedMotion() ? 1 : HOLD_SCALE;
     setPhase("holding");
     setShowHint(false);
     ensureRunning();
@@ -266,11 +418,9 @@ function Signet({
     const a = anim.current!;
     if (!a.filling) return;
     a.filling = false;
-    a.scale.config = PRESS_SPRING;
-    a.scale.target = 1;
     const now = performance.now();
     if (a.progress >= configRef.current.slipForgiveness) {
-      commitConfirm(now);
+      startProcessing(now);
       return;
     }
     a.draining = true;
@@ -279,13 +429,15 @@ function Signet({
       setShowHint(true);
     }
     ensureRunning();
-  }, [commitConfirm, ensureRunning]);
+  }, [ensureRunning, startProcessing]);
 
   const startUndoWindow = useCallback(() => {
     const a = anim.current!;
     a.filling = false;
     a.draining = false;
-    a.progress = 0;
+    // Start full so the window has a bar to drain, instead of blanking on tap.
+    a.progress = 1;
+    if (fillRef.current) fillRef.current.style.transform = "scaleX(1)";
     a.scale.target = 1;
     a.undoStart = performance.now();
     if (ringRef.current) {
@@ -300,40 +452,87 @@ function Signet({
     const a = anim.current!;
     if (a.undoStart === 0) return;
     a.undoStart = 0;
+    // Recede the remaining bar instead of popping it off.
+    a.draining = true;
     a.scale.config = SETTLE_SPRING;
     a.scale.target = 1;
     if (!prefersReducedMotion()) {
       a.scale.velocity = -SETTLE_KICK_VELOCITY;
     }
-    setPhase("idle");
+    setPhase("draining");
     ensureRunning();
   }, [ensureRunning]);
 
+  const retry = useCallback(() => {
+    // Already confirmed once. Charge again without another hold or undo window.
+    startProcessing(performance.now());
+  }, [startProcessing]);
+
   useEffect(() => {
-    if (phaseRef.current === "confirmed") return;
+    const current = phaseRef.current;
+    if (current === "paid" || current === "processing") return;
+    payIdRef.current += 1;
     const a = anim.current!;
     a.filling = false;
     a.draining = false;
     a.undoStart = 0;
     a.progress = 0;
+    a.shakeRemain = 0;
+    a.shakeX = 0;
     a.scale.snap(1);
     setPhase("idle");
     setShowHint(false);
     ensureRunning();
   }, [mode, ensureRunning]);
 
+  const locked = Boolean(disabled) || phase === "processing" || phase === "paid";
+
   const onPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
-    if (mode !== "hold" || event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    startHold();
+    onPointerDownProp?.(event);
+    if (event.defaultPrevented || locked || event.button !== 0) return;
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic or already-released pointers can throw; the press should still run.
+    }
+    // Press scale is pointer-only. Keyboard Space still fills, without the dip.
+    const a = anim.current!;
+    a.scale.config = PRESS_SPRING;
+    a.scale.target = prefersReducedMotion() ? 1 : HOLD_SCALE;
+    ensureRunning();
+    if (mode === "hold") startHold();
   };
 
-  const onPointerUp = () => {
-    if (mode !== "hold") return;
-    releaseHold();
+  const endPress = () => {
+    const a = anim.current!;
+    a.scale.config = PRESS_SPRING;
+    a.scale.target = 1;
+    ensureRunning();
+    if (mode === "hold") releaseHold();
   };
 
-  const onClick = () => {
+  const onPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    onPointerUpProp?.(event);
+    endPress();
+  };
+
+  const onPointerCancel = (event: PointerEvent<HTMLButtonElement>) => {
+    onPointerCancelProp?.(event);
+    endPress();
+  };
+
+  const onLostPointerCapture = (event: PointerEvent<HTMLButtonElement>) => {
+    onLostPointerCaptureProp?.(event);
+    endPress();
+  };
+
+  const onClick = (event: MouseEvent<HTMLButtonElement>) => {
+    onClickProp?.(event);
+    if (event.defaultPrevented || locked) return;
+    if (phase === "failed") {
+      retry();
+      return;
+    }
     if (mode !== "undo") return;
     if (phase === "idle") {
       startUndoWindow();
@@ -343,6 +542,17 @@ function Signet({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    onKeyDownProp?.(event);
+    if (event.defaultPrevented) return;
+    if (locked && (event.key === " " || event.key === "Enter")) {
+      event.preventDefault();
+      return;
+    }
+    if (phase === "failed" && (event.key === " " || event.key === "Enter")) {
+      event.preventDefault();
+      if (!event.repeat) retry();
+      return;
+    }
     if (mode !== "hold") return;
     if (event.key === " ") {
       event.preventDefault();
@@ -356,164 +566,111 @@ function Signet({
   };
 
   const onKeyUp = (event: KeyboardEvent<HTMLButtonElement>) => {
+    onKeyUpProp?.(event);
+    if (event.defaultPrevented) return;
     if (mode === "hold" && event.key === " ") {
       event.preventDefault();
       releaseHold();
     }
   };
 
+  const onContextMenu = (event: MouseEvent<HTMLButtonElement>) => {
+    onContextMenuProp?.(event);
+    event.preventDefault();
+  };
+
   const label = (() => {
-    if (phase === "confirmed") return labels.confirmed;
-    if (phase === "undoing") return labels.undo ?? "Undo";
-    return mode === "hold" ? labels.hold : labels.action;
+    if (phase === "paid") return "Paid";
+    if (phase === "processing") return "Paying";
+    if (phase === "failed") return "Retry";
+    if (phase === "undoing") return "Undo";
+    if (mode === "hold") return `Hold to pay ${amount}`;
+    return `Pay ${amount}`;
   })();
 
   const status = (() => {
-    if (phase === "confirmed") return `${labels.confirmed}.`;
-    if (phase === "undoing")
-      return `${labels.confirmed}. Press again within ${Math.round(undoWindow / 1000)} seconds to undo.`;
+    if (phase === "paid") return "Payment complete.";
+    if (phase === "processing") return "Processing payment.";
+    if (phase === "failed") return "Payment failed. Press to retry.";
+    if (phase === "undoing") return "Press again to undo before the payment is sent.";
     return "";
   })();
 
-  const icon: Icon =
-    phase === "undoing" ? "ring" : phase === "confirmed" ? "check" : "none";
+  const icon: Icon = phase === "undoing" ? "ring" : phase === "paid" ? "check" : "none";
 
   const [swap, setSwap] = useState({
     label,
     icon,
-    ghost: null as { label: string; icon: Icon } | null,
+    ghost: null as { label: string; icon: Icon; ringOffset: string } | null,
     ghostKey: 0,
   });
   if (swap.label !== label) {
-    setSwap({
-      label,
-      icon,
-      ghost: { label: swap.label, icon: swap.icon },
-      ghostKey: swap.ghostKey + 1,
-    });
+    if (prefersReducedMotion()) {
+      setSwap({ label, icon, ghost: null, ghostKey: swap.ghostKey });
+    } else {
+      setSwap({
+        label,
+        icon,
+        ghost: {
+          label: swap.label,
+          icon: swap.icon,
+          ringOffset: ringRef.current?.style.strokeDashoffset || "0",
+        },
+        ghostKey: swap.ghostKey + 1,
+      });
+    }
   }
 
   return (
     <div className={styles.signet} data-signet="" data-mode={mode}>
       <button
-        ref={buttonRef}
+        {...props}
+        ref={setButtonRef}
         type="button"
         data-signet-button=""
         data-phase={phase}
         data-mode={mode}
-        className={[styles.button, flash ? styles.flash : ""].join(" ")}
-        disabled={phase === "confirmed"}
+        className={[
+          styles.button,
+          phase === "paid" ? styles.paid : "",
+          phase === "processing" ? styles.processing : "",
+          phase === "failed" ? styles.failed : "",
+          flash ? styles.flash : "",
+          className ?? "",
+        ].join(" ")}
+        // Native disabled drops the focused control from the tab order.
+        aria-label={label}
+        aria-disabled={disabled || phase === "paid" || undefined}
+        aria-busy={phase === "processing" || undefined}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onLostPointerCapture={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onLostPointerCapture={onLostPointerCapture}
         onClick={onClick}
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}
-        onContextMenu={(event) => event.preventDefault()}
-        onAnimationEnd={(event) => {
-          if (event.target === event.currentTarget) setFlash(false);
-        }}
+        onContextMenu={onContextMenu}
       >
-        <div
-          ref={fillRef}
-          data-signet-fill=""
-          className={styles.fill}
-          aria-hidden="true"
-        />
-        <span className={styles.label}>
+        <div ref={fillRef} data-signet-fill="" className={styles.fill} aria-hidden="true" />
+        <div className={styles.sheen} aria-hidden="true" />
+        <div className={styles.glint} aria-hidden="true" onAnimationEnd={() => setFlash(false)} />
+        <span className={styles.label} aria-hidden="true">
           <span
-            key={label}
-            className={[
-              styles.labelIn,
-              phase === "confirmed" ? styles.slowSwap : "",
-            ].join(" ")}
+            key={`in-${swap.ghostKey}`}
+            className={styles.face}
+            data-swap={swap.ghostKey > 0 || undefined}
           >
-            {phase === "undoing" && (
-              <svg
-                className={styles.ring}
-                viewBox="0 0 20 20"
-                width="18"
-                height="18"
-                aria-hidden="true"
-              >
-                <circle
-                  className={styles.ringTrack}
-                  cx="10"
-                  cy="10"
-                  r={RING_RADIUS}
-                />
-                <circle
-                  ref={ringRef}
-                  className={styles.ringArc}
-                  cx="10"
-                  cy="10"
-                  r={RING_RADIUS}
-                  strokeDasharray={RING_CIRCUMFERENCE}
-                  strokeDashoffset="0"
-                />
-              </svg>
-            )}
-            {phase === "confirmed" && (
-              <svg
-                className={styles.check}
-                viewBox="0 0 20 20"
-                width="18"
-                height="18"
-                aria-hidden="true"
-              >
-                <path d="M4 10.5 8.5 15 16 6" />
-              </svg>
-            )}
-            {label}
+            <Glyph icon={swap.icon} ringRef={swap.icon === "ring" ? ringRef : undefined} />
+            {swap.label}
           </span>
           {swap.ghost !== null && (
             <span
-              key={swap.ghostKey}
-              className={[
-                styles.labelOut,
-                phase === "confirmed" ? styles.slowSwap : "",
-              ].join(" ")}
+              key={`out-${swap.ghostKey}`}
+              className={[styles.face, styles.faceLeave].join(" ")}
               aria-hidden="true"
-              onAnimationEnd={() =>
-                setSwap((current) => ({ ...current, ghost: null }))
-              }
+              onAnimationEnd={() => setSwap((current) => ({ ...current, ghost: null }))}
             >
-              {swap.ghost.icon === "ring" && (
-                <svg
-                  className={styles.ring}
-                  viewBox="0 0 20 20"
-                  width="18"
-                  height="18"
-                  aria-hidden="true"
-                >
-                  <circle
-                    className={styles.ringTrack}
-                    cx="10"
-                    cy="10"
-                    r={RING_RADIUS}
-                  />
-                  <circle
-                    className={styles.ringArc}
-                    cx="10"
-                    cy="10"
-                    r={RING_RADIUS}
-                    strokeDasharray={RING_CIRCUMFERENCE}
-                    strokeDashoffset={RING_CIRCUMFERENCE}
-                  />
-                </svg>
-              )}
-              {swap.ghost.icon === "check" && (
-                <svg
-                  className={styles.check}
-                  viewBox="0 0 20 20"
-                  width="18"
-                  height="18"
-                  aria-hidden="true"
-                >
-                  <path d="M4 10.5 8.5 15 16 6" />
-                </svg>
-              )}
+              <Glyph icon={swap.ghost.icon} ringOffset={swap.ghost.ringOffset} />
               {swap.ghost.label}
             </span>
           )}
@@ -521,10 +678,10 @@ function Signet({
       </button>
       <p
         className={styles.hint}
-        data-visible={showHint || undefined}
-        aria-hidden={!showHint}
+        data-visible={showHint || phase === "failed" || undefined}
+        aria-hidden={phase === "failed" || !showHint}
       >
-        Press and hold to confirm
+        {phase === "failed" ? "Payment failed" : "Press and hold to pay"}
       </p>
       <p className={styles.status} role="status">
         {status}
@@ -533,4 +690,5 @@ function Signet({
   );
 }
 
+export { Signet };
 export default Signet;

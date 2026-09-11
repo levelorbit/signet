@@ -7,14 +7,17 @@
 
 .button {
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   border: none;
   border-radius: 12px;
+  min-height: 44px;
   padding: var(--space-md) var(--space-lg);
   font: inherit;
   font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-bg);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-on-ink);
   background: var(--color-ink);
   cursor: pointer;
   touch-action: none;
@@ -22,12 +25,39 @@
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
   will-change: transform;
-  transition: box-shadow 160ms ease, background-color 160ms ease;
 }
 
-.button:hover:not(:disabled) {
-  background: var(--color-ink-hover);
-  box-shadow: 0 4px 14px oklch(0 0 0 / 0.18);
+/* Paid/fail colour sits on its own layer so the change is opacity, not paint. */
+.button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--color-paid);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease-out);
+}
+
+.button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: oklch(1 0 0);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .button:hover:not(:disabled):not([aria-disabled="true"]):not(.processing)::after {
+    opacity: var(--overlay-hover);
+  }
+}
+
+.button:active:not(:disabled):not([aria-disabled="true"]):not(.processing):not(.paid)::after {
+  opacity: var(--overlay-press);
 }
 
 .button:focus-visible {
@@ -35,82 +65,146 @@
   outline-offset: 3px;
 }
 
-.button:disabled {
+.button:disabled,
+.button[aria-disabled="true"] {
   cursor: default;
 }
 
-.button[data-phase="confirmed"] {
-  background: var(--color-confirmed);
+.button.processing {
+  cursor: default;
+}
+
+.button.paid::before {
+  opacity: 1;
+}
+
+.button.failed::before {
+  background: var(--color-fail);
+  opacity: 1;
 }
 
 .fill {
   position: absolute;
   inset: 0;
-  background: var(--color-progress);
+  z-index: 1;
+  background: oklch(1 0 0);
+  opacity: var(--overlay-progress);
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
   pointer-events: none;
+  transition: opacity 200ms var(--ease-out);
 }
 
-.button[data-phase="confirmed"] .fill {
-  background: var(--color-confirmed);
+.paid .fill,
+.failed .fill {
+  opacity: var(--overlay-progress-end);
+}
+
+/*
+  A sheen is a highlight band that crosses the control. Translating a full-size
+  overlay by a fraction of itself (and mixing in background-size) just pulses in
+  place. Own-size translate from -100% to 100%, linear, is the sweep.
+*/
+.sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 36%,
+    oklch(1 0 0 / 0.18) 50%,
+    transparent 64%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  /* Keep the sweep alive but paused so ending processing fades in place
+     instead of snapping the band back to -100%. */
+  animation: sheen 1.45s linear infinite;
+  animation-play-state: paused;
+  transition: opacity 200ms var(--ease-out);
+}
+
+.processing .sheen {
+  opacity: 1;
+  animation-play-state: running;
+}
+
+.glint {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: oklch(1 0 0);
+  opacity: 0;
+}
+
+.flash .glint {
+  animation: flash 200ms var(--ease-out);
 }
 
 .label {
   position: relative;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: center;
   /* Taller than the 18px icons, so their appearance can't change the button height. */
   line-height: 1.25rem;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .label svg {
   flex: none;
 }
 
-.labelIn {
+.face {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  animation: label-in 200ms ease-out;
 }
 
-.labelOut {
+.face[data-swap] {
+  /* both: first paint is the from-keyframe, so the new label doesn't
+     flash at full opacity on top of the outgoing one. */
+  animation: face-in 200ms var(--ease-out) both;
+}
+
+.faceLeave {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-  opacity: 0;
+  width: 100%;
   pointer-events: none;
-  animation: label-out 200ms ease-out;
+  /* forwards: hold the last frame so the old label can't snap back
+     before onAnimationEnd unmounts it. */
+  animation: face-out 150ms var(--ease-out) forwards;
 }
 
-/* A committed action deserves more weight than an ordinary label shift. */
-.labelIn.slowSwap,
-.labelOut.slowSwap {
-  animation-duration: 450ms;
-}
-
-@keyframes label-in {
+@keyframes face-in {
   from {
     opacity: 0;
-    filter: blur(2px);
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@keyframes label-out {
+@keyframes face-out {
   from {
     opacity: 1;
-    filter: blur(0);
+    transform: translateY(0);
   }
   to {
     opacity: 0;
-    filter: blur(2px);
+    transform: translateY(-2px);
   }
 }
 
@@ -126,37 +220,66 @@
 
 .ringArc {
   fill: none;
-  stroke: var(--color-bg);
+  stroke: var(--color-on-ink);
   stroke-width: 2.5;
   stroke-linecap: round;
 }
 
 .check {
   fill: none;
-  stroke: var(--color-bg);
+  stroke: var(--color-on-ink);
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.flash {
-  animation: flash 260ms ease-out;
+  /* The stroke is left-heavy in the viewBox; shift toward the open side. */
+  margin-inline-start: 1px;
 }
 
 @keyframes flash {
-  0% {
-    filter: brightness(1.7);
+  from {
+    opacity: 0.42;
   }
-  100% {
-    filter: brightness(1);
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flash,
-  .labelIn,
-  .labelOut {
+  .button::before,
+  .button::after,
+  .fill,
+  .sheen,
+  .hint {
+    transition: none;
+  }
+
+  .face[data-swap],
+  .faceLeave {
     animation: none;
+  }
+
+  .flash .glint {
+    animation: none;
+  }
+
+  .sheen,
+  .processing .sheen {
+    animation: none;
+    transform: none;
+  }
+
+  .processing .sheen {
+    opacity: 0.14;
+    background: oklch(1 0 0 / 0.1);
   }
 }
 
@@ -168,13 +291,19 @@
   margin: 0;
   font-size: 0.85rem;
   text-align: center;
-  color: var(--color-faint);
+  color: var(--color-muted);
   opacity: 0;
-  transition: opacity 200ms ease;
+  transform: translateY(-2px);
+  pointer-events: none;
+  user-select: none;
+  transition:
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
 }
 
 .hint[data-visible] {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .status {

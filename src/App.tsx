@@ -1,5 +1,15 @@
-import { useState } from "react";
-import Signet, { type SignetMode } from "./components/Signet/Signet.tsx";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
+import Signet, { type SignetMode, type SignetStatus } from "./components/Signet/Signet.tsx";
+import { Spring } from "./components/Signet/spring.ts";
 import styles from "./App.module.css";
 
 const MODES = [
@@ -8,92 +18,268 @@ const MODES = [
   { value: "undo", label: "Undo" },
 ] as const;
 
-const REPOSITORY = "levelorbit/signet";
+const OUTCOMES = [
+  { value: "ok", label: "Succeed" },
+  { value: "fail", label: "Fail" },
+] as const;
 
-const CONSEQUENCES = [
-  "48 issues and 12 pull requests",
-  "3 deploy keys and 2 webhooks",
-  "the entire commit history",
+// Long enough for the processing sheen to read as a charge in flight.
+const PAY_DELAY_MS = 900;
+
+const ORDER = [
+  { name: "Wax seal kit", price: 24 },
+  { name: "Shipping", price: 3.5 },
 ];
 
+const TOTAL = ORDER.reduce((sum, line) => sum + line.price, 0);
+
+function formatUSD(value: number): string {
+  return value.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
 type ModeChoice = (typeof MODES)[number]["value"];
+type Outcome = (typeof OUTCOMES)[number]["value"];
+
+const THUMB_SPRING = { stiffness: 380, damping: 34 };
+
+function useThumbSpring(index: number, snapRef: RefObject<boolean>) {
+  const thumbRef = useRef<HTMLSpanElement>(null);
+  const springRef = useRef<Spring | null>(null);
+  if (springRef.current === null) {
+    springRef.current = new Spring(index, THUMB_SPRING);
+  }
+
+  useEffect(() => {
+    const spring = springRef.current!;
+    const thumb = thumbRef.current;
+    if (!thumb) return;
+
+    // Keyboard motion and reduced-motion both snap. Pointer-driven changes stretch.
+    const snap = snapRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    snapRef.current = false;
+
+    if (snap) {
+      spring.snap(index);
+      thumb.style.transform = `translate3d(${index * 100}%, 0, 0)`;
+      return;
+    }
+
+    spring.target = index;
+    let raf = 0;
+    let last = performance.now();
+
+    const tick = (now: number) => {
+      const moving = spring.step(now - last);
+      last = now;
+      // Stretch along the travel axis so the thumb reads as one moving piece.
+      const stretch = 1 + Math.min(Math.abs(spring.velocity) * 0.008, 0.12);
+      thumb.style.transform = `translate3d(${spring.value * 100}%, 0, 0) scaleX(${stretch})`;
+      if (moving) raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [index, snapRef]);
+
+  return thumbRef;
+}
+
+function Segmented<T extends string>({
+  name,
+  legend,
+  value,
+  options,
+  onChange,
+}: {
+  name: string;
+  legend: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const snapRef = useRef(false);
+  const thumbRef = useThumbSpring(selectedIndex, snapRef);
+
+  const onThumbKeyDown = (event: KeyboardEvent<HTMLFieldSetElement>) => {
+    switch (event.key) {
+      case "ArrowLeft":
+      case "ArrowRight":
+      case "ArrowUp":
+      case "ArrowDown":
+        snapRef.current = true;
+    }
+  };
+
+  return (
+    <fieldset className={styles.modes} onKeyDown={onThumbKeyDown}>
+      <legend className={styles.modesLegend}>{legend}</legend>
+      <div
+        className={styles.switcher}
+        style={{ "--switcher-cols": options.length } as CSSProperties}
+      >
+        <span ref={thumbRef} className={styles.thumb} aria-hidden="true" />
+        {options.map(({ value: option, label }) => (
+          <label key={option} className={styles.modeOption}>
+            <input
+              className={styles.modeInput}
+              type="radio"
+              name={name}
+              value={option}
+              checked={value === option}
+              onChange={() => onChange(option)}
+            />
+            <span className={styles.modeLabel}>{label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 function App() {
   const [modeChoice, setModeChoice] = useState<ModeChoice>("auto");
+  const [outcome, setOutcome] = useState<Outcome>("ok");
   const [resetKey, setResetKey] = useState(0);
-  const [deleted, setDeleted] = useState(false);
+  const [paid, setPaid] = useState(false);
+  const [status, setStatus] = useState<SignetStatus>("idle");
+  const payRef = useRef<HTMLButtonElement>(null);
+  const resetRef = useRef<HTMLButtonElement>(null);
+  const outcomeRef = useRef(outcome);
+  outcomeRef.current = outcome;
 
-  const mode: SignetMode | undefined =
-    modeChoice === "auto" ? undefined : modeChoice;
+  const mode: SignetMode | undefined = modeChoice === "auto" ? undefined : modeChoice;
+
+  const onPay = useCallback(() => {
+    return new Promise<void>((resolve, reject) => {
+      window.setTimeout(() => {
+        if (outcomeRef.current === "ok") {
+          setPaid(true);
+          resolve();
+        } else {
+          reject(new Error("Payment failed"));
+        }
+      }, PAY_DELAY_MS);
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (paid) resetRef.current?.focus();
+  }, [paid]);
+
+  useLayoutEffect(() => {
+    if (resetKey === 0) return;
+    payRef.current?.focus();
+  }, [resetKey]);
 
   return (
     <main className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.title}>Signet</h1>
-        <p className={styles.tagline}>
-          A hold-to-confirm component for destructive actions, adapted to mobile
-          and desktop.
-        </p>
+        <p className={styles.tagline}>From click to receipt.</p>
       </header>
 
-      <section className={styles.card} aria-labelledby="danger-heading">
-        <div className={styles.cardHeader}>
-          <span className={styles.dangerBadge}>Danger zone</span>
-          <h2 id="danger-heading" className={styles.cardTitle}>
-            Delete this repository
-          </h2>
-          <p className={styles.repository}>{REPOSITORY}</p>
+      <section className={styles.card} aria-label="Checkout demo">
+        <div className={styles.lines}>
+          {ORDER.map(({ name, price }) => (
+            <div key={name} className={styles.item}>
+              <div>{name}</div>
+              <div className={styles.itemPrice}>{formatUSD(price)}</div>
+            </div>
+          ))}
+          <div className={styles.total}>
+            <div>Total</div>
+            <div className={styles.totalPrice}>{formatUSD(TOTAL)}</div>
+          </div>
         </div>
-
-        <div className={styles.consequences}>
-          <p className={styles.consequencesIntro}>This permanently removes:</p>
-          <ul className={styles.consequenceList}>
-            {CONSEQUENCES.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
+        <div className={styles.payment}>
+          <svg
+            className={styles.cardIcon}
+            viewBox="0 0 28 18"
+            width="28"
+            height="18"
+            aria-hidden="true"
+          >
+            <rect x="0.5" y="0.5" width="27" height="17" rx="3" />
+            <circle cx="11" cy="9" r="4.5" />
+            <circle cx="17" cy="9" r="4.5" />
+          </svg>
+          <span>Mastercard ···· 4242</span>
+          <span className={styles.paymentSaved}>Saved</span>
         </div>
-
         <Signet
           key={resetKey}
-          labels={{
-            action: "Delete repository",
-            hold: "Hold to delete",
-            confirmed: "Deleted",
-          }}
+          ref={payRef}
+          amount={formatUSD(TOTAL)}
           mode={mode}
-          onConfirm={() => setDeleted(true)}
+          onPay={onPay}
+          onStatusChange={setStatus}
         />
       </section>
 
       <div className={styles.controls}>
-        <fieldset className={styles.modes}>
-          <legend className={styles.modesLegend}>Pointer mode</legend>
-          {MODES.map(({ value, label }) => (
-            <label key={value} className={styles.modeOption}>
-              <input
-                type="radio"
-                name="mode"
-                value={value}
-                checked={modeChoice === value}
-                onChange={() => setModeChoice(value)}
-              />
-              {label}
-            </label>
-          ))}
-        </fieldset>
+        <div className={styles.controlGroup}>
+          <Segmented
+            name="mode"
+            legend="Pointer mode"
+            value={modeChoice}
+            options={MODES}
+            onChange={setModeChoice}
+          />
+          <Segmented
+            name="outcome"
+            legend="Charge"
+            value={outcome}
+            options={OUTCOMES}
+            onChange={setOutcome}
+          />
+        </div>
         <button
+          ref={resetRef}
           type="button"
           className={styles.reset}
-          disabled={!deleted}
+          disabled={status === "idle"}
           onClick={() => {
             setResetKey((key) => key + 1);
-            setDeleted(false);
+            setPaid(false);
+            setStatus("idle");
           }}
         >
           Reset demo
         </button>
       </div>
+
+      <article className={styles.writeup} aria-labelledby="about-heading">
+        <section>
+          <h2 id="about-heading">How it started</h2>
+          <p>
+            I found a website with a messy payment flow. It had several payment providers and the
+            process happened directly on the item page. The payment flow, before you even decided
+            to pay, occupied nearly half of the page. It inspired me to prototype my own version.
+            Before prototyping, I also researched how some companies handle paying. Apple and
+            Amazon stood out to me.
+          </p>
+          <p>
+            Apple's Face ID payment flow on mobile inspired me to try hold-to-confirm. I wanted
+            to preserve that intentional moment through a gesture I could use across devices.
+          </p>
+          <p>
+            From Amazon, I took the speed of paying once your details are saved. The flow I tried
+            also had a button and confirmation, but for my experiment I replaced that confirmation
+            with a chance to cancel after clicking Pay.
+          </p>
+        </section>
+
+        <section>
+          <h2>Hold or undo</h2>
+          <p>
+            On mobile, hold feels deliberate. When I tried it on desktop, it added unnecessary
+            friction and wasn't as pleasant as holding the button using a finger. That's why I
+            decided to flip the order. After clicking Pay, the user can cancel before the payment
+            is sent. This helps preserve the intention to pay. I was satisfied with the result.
+          </p>
+        </section>
+      </article>
 
       <div className={styles.footer}>
         <a
@@ -102,12 +288,7 @@ function App() {
           target="_blank"
           rel="noreferrer"
         >
-          <svg
-            className={styles.githubIcon}
-            width="18"
-            height="18"
-            aria-hidden="true"
-          >
+          <svg className={styles.githubIcon} width="18" height="18" aria-hidden="true">
             <use href="/icons.svg#github-icon" />
           </svg>
           Open on GitHub
