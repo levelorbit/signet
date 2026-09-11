@@ -1,316 +1,319 @@
-.signet {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.button {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border: none;
-  border-radius: 12px;
-  min-height: 44px;
-  padding: var(--space-md) var(--space-lg);
-  font: inherit;
-  font-size: 1rem;
-  font-weight: var(--font-weight-semibold);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-on-ink);
-  background: var(--color-ink);
-  cursor: pointer;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  will-change: transform;
-}
-
-/* Paid/fail colour sits on its own layer so the change is opacity, not paint. */
-.button::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background: var(--color-paid);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 200ms var(--ease-out);
-}
-
-.button::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  background: oklch(1 0 0);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 150ms var(--ease-out);
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .button:hover:not(:disabled):not([aria-disabled="true"]):not(.processing)::after {
-    opacity: var(--overlay-hover);
+/* Unlayered consumer styles can override the component without selector escalation. */
+@layer signet {
+  .signet {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
   }
-}
 
-.button:active:not(:disabled):not([aria-disabled="true"]):not(.processing):not(.paid)::after {
-  opacity: var(--overlay-press);
-}
+  .button {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border: none;
+    border-radius: var(--signet-radius, 12px);
+    min-height: 44px;
+    padding: var(--space-md) var(--space-lg);
+    font: inherit;
+    font-size: 1rem;
+    font-weight: var(--font-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    color: var(--signet-fg, var(--color-on-ink));
+    background: var(--signet-bg, var(--color-ink));
+    cursor: pointer;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    will-change: transform;
+  }
 
-.button:focus-visible {
-  outline: 3px solid var(--color-ink);
-  outline-offset: 3px;
-}
+  /* Paid/fail colour sits on its own layer so the change is opacity, not paint. */
+  .button::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: var(--signet-paid, var(--color-paid));
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms var(--ease-out);
+  }
 
-.button:disabled,
-.button[aria-disabled="true"] {
-  cursor: default;
-}
+  .button::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: oklch(1 0 0);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 150ms var(--ease-out);
+  }
 
-.button.processing {
-  cursor: default;
-}
+  @media (hover: hover) and (pointer: fine) {
+    .button:hover:not(:disabled):not([aria-disabled="true"]):not(.processing)::after {
+      opacity: var(--overlay-hover);
+    }
+  }
 
-.button.paid::before {
-  opacity: 1;
-}
+  .button:active:not(:disabled):not([aria-disabled="true"]):not(.processing):not(.paid)::after {
+    opacity: var(--overlay-press);
+  }
 
-.button.failed::before {
-  background: var(--color-fail);
-  opacity: 1;
-}
+  .button:focus-visible {
+    outline: 3px solid var(--signet-focus, var(--color-ink));
+    outline-offset: 3px;
+  }
 
-.fill {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: oklch(1 0 0);
-  opacity: var(--overlay-progress);
-  transform: scaleX(0);
-  transform-origin: left center;
-  will-change: transform;
-  pointer-events: none;
-  transition: opacity 200ms var(--ease-out);
-}
+  .button:disabled,
+  .button[aria-disabled="true"] {
+    cursor: default;
+  }
 
-.paid .fill,
-.failed .fill {
-  opacity: var(--overlay-progress-end);
-}
+  .button.processing {
+    cursor: default;
+  }
 
-/*
+  .button.paid::before {
+    opacity: 1;
+  }
+
+  .button.failed::before {
+    background: var(--signet-fail, var(--color-fail));
+    opacity: 1;
+  }
+
+  .fill {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: oklch(1 0 0);
+    opacity: var(--signet-fill-opacity, var(--overlay-progress));
+    transform: scaleX(0);
+    transform-origin: left center;
+    will-change: transform;
+    pointer-events: none;
+    transition: opacity 200ms var(--ease-out);
+  }
+
+  .paid .fill,
+  .failed .fill {
+    opacity: var(--overlay-progress-end);
+  }
+
+  /*
   A sheen is a highlight band that crosses the control. Translating a full-size
   overlay by a fraction of itself (and mixing in background-size) just pulses in
   place. Own-size translate from -100% to 100%, linear, is the sweep.
 */
-.sheen {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  opacity: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 0%,
-    transparent 36%,
-    oklch(1 0 0 / 0.18) 50%,
-    transparent 64%,
-    transparent 100%
-  );
-  transform: translateX(-100%);
-  /* Keep the sweep alive but paused so ending processing fades in place
-     instead of snapping the band back to -100%. */
-  animation: sheen 1.45s linear infinite;
-  animation-play-state: paused;
-  transition: opacity 200ms var(--ease-out);
-}
-
-.processing .sheen {
-  opacity: 1;
-  animation-play-state: running;
-}
-
-.glint {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  background: oklch(1 0 0);
-  opacity: 0;
-}
-
-.flash .glint {
-  animation: flash 200ms var(--ease-out);
-}
-
-.label {
-  position: relative;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* Taller than the 18px icons, so their appearance can't change the button height. */
-  line-height: 1.25rem;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.label svg {
-  flex: none;
-}
-
-.face {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-sm);
-}
-
-.face[data-swap] {
-  /* both: first paint is the from-keyframe, so the new label doesn't
-     flash at full opacity on top of the outgoing one. */
-  animation: face-in 200ms var(--ease-out) both;
-}
-
-.faceLeave {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  width: 100%;
-  pointer-events: none;
-  /* forwards: hold the last frame so the old label can't snap back
-     before onAnimationEnd unmounts it. */
-  animation: face-out 150ms var(--ease-out) forwards;
-}
-
-@keyframes face-in {
-  from {
+  .sheen {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
     opacity: 0;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes face-out {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-2px);
-  }
-}
-
-.ring {
-  transform: rotate(-90deg);
-}
-
-.ringTrack {
-  fill: none;
-  stroke: oklch(1 0 0 / 0.25);
-  stroke-width: 2.5;
-}
-
-.ringArc {
-  fill: none;
-  stroke: var(--color-on-ink);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-}
-
-.check {
-  fill: none;
-  stroke: var(--color-on-ink);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  /* The stroke is left-heavy in the viewBox; shift toward the open side. */
-  margin-inline-start: 1px;
-}
-
-@keyframes flash {
-  from {
-    opacity: 0.42;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-@keyframes sheen {
-  from {
+    background: linear-gradient(
+      105deg,
+      transparent 0%,
+      transparent 36%,
+      oklch(1 0 0 / 0.18) 50%,
+      transparent 64%,
+      transparent 100%
+    );
     transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(100%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .button::before,
-  .button::after,
-  .fill,
-  .sheen,
-  .hint {
-    transition: none;
+    /* Keep the sweep alive but paused so ending processing fades in place
+     instead of snapping the band back to -100%. */
+    animation: sheen 1.45s linear infinite;
+    animation-play-state: paused;
+    transition: opacity 200ms var(--ease-out);
   }
 
-  .face[data-swap],
-  .faceLeave {
-    animation: none;
+  .processing .sheen {
+    opacity: 1;
+    animation-play-state: running;
+  }
+
+  .glint {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    background: oklch(1 0 0);
+    opacity: 0;
   }
 
   .flash .glint {
-    animation: none;
+    animation: flash 200ms var(--ease-out);
   }
 
-  .sheen,
-  .processing .sheen {
-    animation: none;
-    transform: none;
+  .label {
+    position: relative;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Taller than the 18px icons, so their appearance can't change the button height. */
+    line-height: 1.25rem;
+    white-space: nowrap;
+    overflow: hidden;
   }
 
-  .processing .sheen {
-    opacity: 0.14;
-    background: oklch(1 0 0 / 0.1);
+  .label svg {
+    flex: none;
   }
-}
 
-.hint {
-  position: absolute;
-  top: calc(100% + var(--space-xs));
-  left: 0;
-  right: 0;
-  margin: 0;
-  font-size: 0.85rem;
-  text-align: center;
-  color: var(--color-muted);
-  opacity: 0;
-  transform: translateY(-2px);
-  pointer-events: none;
-  user-select: none;
-  transition:
-    opacity 150ms var(--ease-out),
-    transform 150ms var(--ease-out);
-}
+  .face {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+  }
 
-.hint[data-visible] {
-  opacity: 1;
-  transform: translateY(0);
-}
+  .face[data-swap] {
+    /* both: first paint is the from-keyframe, so the new label doesn't
+     flash at full opacity on top of the outgoing one. */
+    animation: face-in 200ms var(--ease-out) both;
+  }
 
-.status {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  .faceLeave {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    width: 100%;
+    pointer-events: none;
+    /* forwards: hold the last frame so the old label can't snap back
+     before onAnimationEnd unmounts it. */
+    animation: face-out 150ms var(--ease-out) forwards;
+  }
+
+  @keyframes face-in {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes face-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-2px);
+    }
+  }
+
+  .ring {
+    transform: rotate(-90deg);
+  }
+
+  .ringTrack {
+    fill: none;
+    stroke: var(--signet-track, oklch(1 0 0 / 0.25));
+    stroke-width: 2.5;
+  }
+
+  .ringArc {
+    fill: none;
+    stroke: var(--signet-fg, var(--color-on-ink));
+    stroke-width: 2.5;
+    stroke-linecap: round;
+  }
+
+  .check {
+    fill: none;
+    stroke: var(--signet-fg, var(--color-on-ink));
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    /* The stroke is left-heavy in the viewBox; shift toward the open side. */
+    margin-inline-start: 1px;
+  }
+
+  @keyframes flash {
+    from {
+      opacity: 0.42;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes sheen {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .button::before,
+    .button::after,
+    .fill,
+    .sheen,
+    .hint {
+      transition: none;
+    }
+
+    .face[data-swap],
+    .faceLeave {
+      animation: none;
+    }
+
+    .flash .glint {
+      animation: none;
+    }
+
+    .sheen,
+    .processing .sheen {
+      animation: none;
+      transform: none;
+    }
+
+    .processing .sheen {
+      opacity: 0.14;
+      background: oklch(1 0 0 / 0.1);
+    }
+  }
+
+  .hint {
+    position: absolute;
+    top: calc(100% + var(--space-xs));
+    left: 0;
+    right: 0;
+    margin: 0;
+    font-size: 0.85rem;
+    text-align: center;
+    color: var(--color-muted);
+    opacity: 0;
+    transform: translateY(-2px);
+    pointer-events: none;
+    user-select: none;
+    transition:
+      opacity 150ms var(--ease-out),
+      transform 150ms var(--ease-out);
+  }
+
+  .hint[data-visible] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
