@@ -1,6 +1,6 @@
 # Signet
 
-A payment button for React.
+An experiment: a payment button for React. It isn't published as a package; clone the repo to run the demo.
 
 Pass it a charge. It handles confirmation, the wait, and what happens after.
 
